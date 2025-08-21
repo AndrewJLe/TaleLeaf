@@ -204,6 +204,104 @@ ${contextText}`;
         const contextPages = upload.pages.slice(startIdx, endIdx);
         return contextPages.join('\n\n');
     }
+
+    // AI-powered content generation methods
+    async generateCharacters(contextText: string): Promise<Array<{ name: string, notes: string }>> {
+        const prompt = `Analyze the provided text and identify all characters mentioned. For each character, provide their name and a brief description including their role, personality traits, and relationships.
+
+Text to analyze:
+${contextText}
+
+Return ONLY a JSON array of objects with "name" and "notes" properties. Example:
+[{"name": "John Smith", "notes": "Protagonist, brave detective with a troubled past. Partner to Sarah."}]`;
+
+        try {
+            const response = await this.chat([{ role: 'user', content: prompt }], contextText);
+            const jsonMatch = response.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+                return JSON.parse(jsonMatch[0]);
+            }
+            return [];
+        } catch (error) {
+            console.error('Error generating characters:', error);
+            throw new Error('Failed to generate characters. Please try again.');
+        }
+    }
+
+    async generateChapterSummary(contextText: string, chapterTitle?: string): Promise<string> {
+        const prompt = `Create a concise chapter summary for the provided text. Focus on key events, character development, and plot advancement. Keep it spoiler-free by focusing on what happens rather than future implications.
+
+${chapterTitle ? `Chapter: ${chapterTitle}` : 'Chapter Content:'}
+
+Text to summarize:
+${contextText}
+
+Provide a clear, informative summary in 2-3 paragraphs.`;
+
+        try {
+            const response = await this.chat([{ role: 'user', content: prompt }], contextText);
+            return response;
+        } catch (error) {
+            console.error('Error generating chapter summary:', error);
+            throw new Error('Failed to generate chapter summary. Please try again.');
+        }
+    }
+
+    async generateLocations(contextText: string): Promise<Array<{ name: string, notes: string }>> {
+        const prompt = `Analyze the provided text and identify all locations, places, and settings mentioned. For each location, provide the name and a description including its significance to the story.
+
+Text to analyze:
+${contextText}
+
+Return ONLY a JSON array of objects with "name" and "notes" properties. Example:
+[{"name": "Misty Forest", "notes": "Dark woodland where the characters first meet the mysterious guide. Known for its dangerous creatures."}]`;
+
+        try {
+            const response = await this.chat([{ role: 'user', content: prompt }], contextText);
+            const jsonMatch = response.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+                return JSON.parse(jsonMatch[0]);
+            }
+            return [];
+        } catch (error) {
+            console.error('Error generating locations:', error);
+            throw new Error('Failed to generate locations. Please try again.');
+        }
+    }
+
+    async generateNotes(contextText: string, topic?: string): Promise<string> {
+        const prompt = `Create insightful reading notes for the provided text. ${topic ? `Focus on: ${topic}` : 'Include themes, literary devices, important quotes, and analysis points that would be helpful for understanding or discussing this text.'}
+
+Text to analyze:
+${contextText}
+
+Provide comprehensive notes with bullet points for easy reading.`;
+
+        try {
+            const response = await this.chat([{ role: 'user', content: prompt }], contextText);
+            return response;
+        } catch (error) {
+            console.error('Error generating notes:', error);
+            throw new Error('Failed to generate notes. Please try again.');
+        }
+    }
+
+    async enhanceCharacterProfile(characterName: string, contextText: string, existingNotes?: string): Promise<string> {
+        const prompt = `Enhance the character profile for "${characterName}" based on the provided text. ${existingNotes ? `Current notes: ${existingNotes}` : 'No existing notes.'}
+
+Text containing character information:
+${contextText}
+
+Provide an enhanced character description including personality, appearance, relationships, motivations, and character arc based on the text.`;
+
+        try {
+            const response = await this.chat([{ role: 'user', content: prompt }], contextText);
+            return response;
+        } catch (error) {
+            console.error('Error enhancing character profile:', error);
+            throw new Error('Failed to enhance character profile. Please try again.');
+        }
+    }
 }
 
 export const aiService = new AIService();

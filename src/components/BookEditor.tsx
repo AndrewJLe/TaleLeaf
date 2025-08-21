@@ -13,6 +13,40 @@ export default function BookEditor({ book, onUpdate }: any) {
     const [tab, setTab] = useState<'characters' | 'chapters' | 'locations' | 'notes'>('characters');
     const [showAISettings, setShowAISettings] = useState(false);
     const [isAILoading, setIsAILoading] = useState(false);
+    const [aiGenerationState, setAiGenerationState] = useState({
+        characters: false,
+        chapters: false,
+        locations: false,
+        notes: false
+    });
+
+    // State for expandable text fields
+    const [expandedFields, setExpandedFields] = useState<Record<string, boolean>>({});
+    const [hoveredTooltip, setHoveredTooltip] = useState<string | null>(null);
+
+    // Helper functions for expandable fields
+    const toggleExpanded = (fieldId: string) => {
+        setExpandedFields(prev => ({ ...prev, [fieldId]: !prev[fieldId] }));
+    };
+
+    const isExpanded = (fieldId: string) => expandedFields[fieldId] || false;
+
+    // Tooltip component
+    const Tooltip = ({ text, children, id }: { text: string, children: React.ReactNode, id: string }) => (
+        <div
+            className="relative inline-block"
+            onMouseEnter={() => setHoveredTooltip(id)}
+            onMouseLeave={() => setHoveredTooltip(null)}
+        >
+            {children}
+            {hoveredTooltip === id && (
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-lg z-50 whitespace-nowrap">
+                    {text}
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                </div>
+            )}
+        </div>
+    );
 
     // Determine page count from uploads if present
     const pageCount = local.pages ?? (local.uploads?.[0]?.pages?.length ?? 300);
@@ -71,33 +105,151 @@ export default function BookEditor({ book, onUpdate }: any) {
     const [editingChapterIndex, setEditingChapterIndex] = useState<number | null>(null);
 
     async function handleAsk() {
-        if (!message.trim()) return;
+        if (!message.trim() || isAILoading) return;
 
-        const userMessage: AIMessage = { role: 'user', content: message.trim() };
-        setChat(c => [...c, userMessage]);
-        setMessage("");
         setIsAILoading(true);
-
         try {
-            // Extract context text from the current window
-            const contextText = aiService.extractContextText(local, local.window.start, local.window.end);
+            const contextText = aiService.extractContextText(local, local.window?.start || 1, local.window?.end || 50);
+            const newMessage = { role: 'user' as const, content: message };
+            const updatedChat = [...chat, newMessage];
+            setChat(updatedChat);
+            setMessage("");
 
-            // Get AI response
-            const response = await aiService.chat([...chat, userMessage], contextText);
-
-            const assistantMessage: AIMessage = { role: 'assistant', content: response };
-            setChat(c => [...c, assistantMessage]);
-        } catch (error) {
+            const response = await aiService.chat(updatedChat, contextText);
+            setChat([...updatedChat, { role: 'assistant', content: response }]);
+        } catch (error: any) {
             console.error('AI Error:', error);
-            const errorMessage: AIMessage = {
+            setChat(prev => [...prev, {
                 role: 'assistant',
-                content: error instanceof Error ? error.message : 'Sorry, I encountered an error. Please try again.'
-            };
-            setChat(c => [...c, errorMessage]);
+                content: `Error: ${error.message || 'Failed to get AI response'}`
+            }]);
         } finally {
             setIsAILoading(false);
         }
     }
+
+    // AI Generation Functions
+    async function generateCharacters() {
+        setAiGenerationState(prev => ({ ...prev, characters: true }));
+        try {
+            const contextText = aiService.extractContextText(local, local.window?.start || 1, local.window?.end || 50);
+            const newCharacters = await aiService.generateCharacters(contextText);
+
+            // Merge with existing characters (avoid duplicates)
+            const existingNames = local.sections.characters.map((c: any) => c.name.toLowerCase());
+            const uniqueNewCharacters = newCharacters.filter(nc =>
+                !existingNames.includes(nc.name.toLowerCase())
+            );
+
+            if (uniqueNewCharacters.length > 0) {
+                const sections = {
+                    ...local.sections,
+                    characters: [...local.sections.characters, ...uniqueNewCharacters]
+                };
+                const updated = { ...local, sections };
+                setLocal(updated);
+                onUpdate(updated);
+            }
+        } catch (error: any) {
+            console.error('Character generation error:', error);
+            alert(`Failed to generate characters: ${error.message}`);
+        } finally {
+            setAiGenerationState(prev => ({ ...prev, characters: false }));
+        }
+    }
+
+    async function generateChapterSummary(chapterIndex: number) {
+        setAiGenerationState(prev => ({ ...prev, chapters: true }));
+        try {
+            const contextText = aiService.extractContextText(local, local.window?.start || 1, local.window?.end || 50);
+            const chapter = local.sections.chapters[chapterIndex];
+            const summary = await aiService.generateChapterSummary(contextText, chapter.name);
+
+            const chapters = [...local.sections.chapters];
+            chapters[chapterIndex] = { ...chapter, notes: summary };
+            const sections = { ...local.sections, chapters };
+            const updated = { ...local, sections };
+            setLocal(updated);
+            onUpdate(updated);
+        } catch (error: any) {
+            console.error('Chapter summary generation error:', error);
+            alert(`Failed to generate chapter summary: ${error.message}`);
+        } finally {
+            setAiGenerationState(prev => ({ ...prev, chapters: false }));
+        }
+    }
+
+    async function generateLocations() {
+        setAiGenerationState(prev => ({ ...prev, locations: true }));
+        try {
+            const contextText = aiService.extractContextText(local, local.window?.start || 1, local.window?.end || 50);
+            const newLocations = await aiService.generateLocations(contextText);
+
+            // Merge with existing locations (avoid duplicates)
+            const existingNames = local.sections.locations.map((l: any) => l.name.toLowerCase());
+            const uniqueNewLocations = newLocations.filter(nl =>
+                !existingNames.includes(nl.name.toLowerCase())
+            );
+
+            if (uniqueNewLocations.length > 0) {
+                const sections = {
+                    ...local.sections,
+                    locations: [...local.sections.locations, ...uniqueNewLocations]
+                };
+                const updated = { ...local, sections };
+                setLocal(updated);
+                onUpdate(updated);
+            }
+        } catch (error: any) {
+            console.error('Location generation error:', error);
+            alert(`Failed to generate locations: ${error.message}`);
+        } finally {
+            setAiGenerationState(prev => ({ ...prev, locations: false }));
+        }
+    }
+
+    async function generateNotes(topic?: string) {
+        setAiGenerationState(prev => ({ ...prev, notes: true }));
+        try {
+            const contextText = aiService.extractContextText(local, local.window?.start || 1, local.window?.end || 50);
+            const newNotes = await aiService.generateNotes(contextText, topic);
+
+            const currentNotes = local.sections.notes || '';
+            const updatedNotes = currentNotes ? `${currentNotes}\n\n--- AI Generated Notes ---\n${newNotes}` : newNotes;
+
+            const sections = { ...local.sections, notes: updatedNotes };
+            const updated = { ...local, sections };
+            setLocal(updated);
+            onUpdate(updated);
+        } catch (error: any) {
+            console.error('Notes generation error:', error);
+            alert(`Failed to generate notes: ${error.message}`);
+        } finally {
+            setAiGenerationState(prev => ({ ...prev, notes: false }));
+        }
+    }
+
+    async function enhanceCharacter(characterIndex: number) {
+        setAiGenerationState(prev => ({ ...prev, characters: true }));
+        try {
+            const contextText = aiService.extractContextText(local, local.window?.start || 1, local.window?.end || 50);
+            const character = local.sections.characters[characterIndex];
+            const enhancedNotes = await aiService.enhanceCharacterProfile(character.name, contextText, character.notes);
+
+            const characters = [...local.sections.characters];
+            characters[characterIndex] = { ...character, notes: enhancedNotes };
+            const sections = { ...local.sections, characters };
+            const updated = { ...local, sections };
+            setLocal(updated);
+            onUpdate(updated);
+        } catch (error: any) {
+            console.error('Character enhancement error:', error);
+            alert(`Failed to enhance character: ${error.message}`);
+        } finally {
+            setAiGenerationState(prev => ({ ...prev, characters: false }));
+        }
+    }
+
     return (
         <div className="space-y-6 max-w-6xl mx-auto">
             {/* Navigation Header */}
@@ -225,6 +377,18 @@ export default function BookEditor({ book, onUpdate }: any) {
                                     👥 Characters ({local.sections.characters.length})
                                 </h4>
                                 <div className="flex gap-3">
+                                    <Tooltip
+                                        text="Automatically find and extract all characters mentioned in your selected page range"
+                                        id="characters-ai-generate"
+                                    >
+                                        <button
+                                            className={`px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 active:scale-95 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 ${aiGenerationState.characters ? 'animate-pulse' : ''}`}
+                                            onClick={generateCharacters}
+                                            disabled={aiGenerationState.characters}
+                                        >
+                                            {aiGenerationState.characters ? '🤖 Generating...' : '🤖 AI Generate'}
+                                        </button>
+                                    </Tooltip>
                                     <input
                                         value={newCharacterName}
                                         onChange={(e) => setNewCharacterName(e.target.value)}
@@ -232,12 +396,18 @@ export default function BookEditor({ book, onUpdate }: any) {
                                         className="px-3 py-2 border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
                                         onKeyPress={(e) => e.key === 'Enter' && addCharacter()}
                                     />
-                                    <button
-                                        className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 active:scale-95 transition-all duration-200 shadow-md hover:shadow-lg"
-                                        onClick={addCharacter}
+
+                                    <Tooltip
+                                        text="Add a new character to your book structure"
+                                        id="add-chapter-button"
                                     >
-                                        ✨ Add
-                                    </button>
+                                        <button
+                                            className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 active:scale-95 transition-all duration-200 shadow-md hover:shadow-lg"
+                                            onClick={addCharacter}
+                                        >
+                                            ✨ Add Character
+                                        </button>
+                                    </Tooltip>
                                 </div>
                             </div>
 
@@ -258,27 +428,62 @@ export default function BookEditor({ book, onUpdate }: any) {
                                             <div className="flex-1 space-y-3">
                                                 <div className="flex justify-between items-center">
                                                     <h5 className="font-semibold text-amber-900 text-lg">{c.name}</h5>
-                                                    <button
-                                                        className="px-3 py-1 text-red-600 hover:bg-red-50 rounded-md text-sm font-medium transition-all duration-200 hover:scale-105"
-                                                        onClick={() => {
-                                                            const chars = [...local.sections.characters];
-                                                            chars.splice(i, 1);
-                                                            const sections = { ...local.sections, characters: chars };
-                                                            const updated = { ...local, sections };
-                                                            setLocal(updated);
-                                                            onUpdate(updated);
-                                                        }}
-                                                    >
-                                                        🗑️ Delete
-                                                    </button>
+                                                    <div className="flex gap-2">
+                                                        <Tooltip
+                                                            text="Use AI to enhance this character's profile with more details from your selected text"
+                                                            id={`enhance-character-${i}`}
+                                                        >
+                                                            <button
+                                                                className={`px-3 py-1 text-purple-600 hover:bg-purple-50 rounded-md text-sm font-medium transition-all duration-200 hover:scale-105 disabled:opacity-50 ${aiGenerationState.characters ? 'animate-pulse' : ''}`}
+                                                                onClick={() => enhanceCharacter(i)}
+                                                                disabled={aiGenerationState.characters}
+                                                            >
+                                                                🤖 AI Enhance
+                                                            </button>
+                                                        </Tooltip>
+                                                        <Tooltip
+                                                            text="Remove this character from your list"
+                                                            id={`delete-character-${i}`}
+                                                        >
+                                                            <button
+                                                                className="px-3 py-1 text-red-600 hover:bg-red-50 rounded-md text-sm font-medium transition-all duration-200 hover:scale-105"
+                                                                onClick={() => {
+                                                                    const chars = [...local.sections.characters];
+                                                                    chars.splice(i, 1);
+                                                                    const sections = { ...local.sections, characters: chars };
+                                                                    const updated = { ...local, sections };
+                                                                    setLocal(updated);
+                                                                    onUpdate(updated);
+                                                                }}
+                                                            >
+                                                                🗑️ Delete
+                                                            </button>
+                                                        </Tooltip>
+                                                    </div>
                                                 </div>
-                                                <textarea
-                                                    value={c.notes}
-                                                    onChange={(e) => updateCharacter(i, { notes: e.target.value })}
-                                                    placeholder="Notes about this character..."
-                                                    className="w-full p-3 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all resize-none"
-                                                    rows={3}
-                                                />
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-sm text-emerald-600 font-medium">Character Notes</span>
+                                                        <Tooltip
+                                                            text={isExpanded(`character-notes-${i}`) ? "Collapse notes area" : "Expand notes area for better writing"}
+                                                            id={`expand-character-${i}`}
+                                                        >
+                                                            <button
+                                                                onClick={() => toggleExpanded(`character-notes-${i}`)}
+                                                                className="text-emerald-600 hover:text-emerald-700 text-sm font-medium hover:bg-emerald-50 px-2 py-1 rounded transition-all"
+                                                            >
+                                                                {isExpanded(`character-notes-${i}`) ? '📐 Collapse' : '📏 Expand'}
+                                                            </button>
+                                                        </Tooltip>
+                                                    </div>
+                                                    <textarea
+                                                        value={c.notes}
+                                                        onChange={(e) => updateCharacter(i, { notes: e.target.value })}
+                                                        placeholder="Notes about this character..."
+                                                        className="w-full p-3 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all resize-none"
+                                                        rows={isExpanded(`character-notes-${i}`) ? 8 : 3}
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -315,20 +520,25 @@ export default function BookEditor({ book, onUpdate }: any) {
                                             setNewChapterName("");
                                         })()}
                                     />
-                                    <button
-                                        className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 active:scale-95 transition-all duration-200 shadow-md hover:shadow-lg"
-                                        onClick={() => {
-                                            if (!newChapterName.trim()) return;
-                                            const chapters = [...local.sections.chapters, { name: newChapterName.trim(), notes: "" }];
-                                            const sections = { ...local.sections, chapters };
-                                            const updated = { ...local, sections };
-                                            setLocal(updated);
-                                            onUpdate(updated);
-                                            setNewChapterName("");
-                                        }}
+                                    <Tooltip
+                                        text="Add a new chapter to your book structure"
+                                        id="add-chapter-button"
                                     >
-                                        ✨ Add Chapter
-                                    </button>
+                                        <button
+                                            className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 active:scale-95 transition-all duration-200 shadow-md hover:shadow-lg"
+                                            onClick={() => {
+                                                if (!newChapterName.trim()) return;
+                                                const chapters = [...local.sections.chapters, { name: newChapterName.trim(), notes: "" }];
+                                                const sections = { ...local.sections, chapters };
+                                                const updated = { ...local, sections };
+                                                setLocal(updated);
+                                                onUpdate(updated);
+                                                setNewChapterName("");
+                                            }}
+                                        >
+                                            ✨ Add Chapter
+                                        </button>
+                                    </Tooltip>
                                 </div>
                             </div>
 
@@ -353,55 +563,96 @@ export default function BookEditor({ book, onUpdate }: any) {
                                                 )}
                                             </div>
                                             <div className="flex gap-2">
-                                                <button
-                                                    className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-md transition-all duration-200 hover:scale-110 disabled:opacity-50"
-                                                    onClick={() => {
-                                                        if (i === 0) return;
-                                                        const chapters = [...local.sections.chapters];
-                                                        const [item] = chapters.splice(i, 1);
-                                                        chapters.splice(i - 1, 0, item);
-                                                        const sections = { ...local.sections, chapters };
-                                                        const updated = { ...local, sections };
-                                                        setLocal(updated);
-                                                        onUpdate(updated);
-                                                    }}
-                                                    disabled={i === 0}
+                                                <Tooltip
+                                                    text="Generate an AI-powered summary of this chapter from your selected text"
+                                                    id={`chapter-summary-${i}`}
                                                 >
-                                                    ⬆️
-                                                </button>
-                                                <button
-                                                    className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-md transition-all duration-200 hover:scale-110 disabled:opacity-50"
-                                                    onClick={() => {
-                                                        if (i === local.sections.chapters.length - 1) return;
-                                                        const chapters = [...local.sections.chapters];
-                                                        const [item] = chapters.splice(i, 1);
-                                                        chapters.splice(i + 1, 0, item);
-                                                        const sections = { ...local.sections, chapters };
-                                                        const updated = { ...local, sections };
-                                                        setLocal(updated);
-                                                        onUpdate(updated);
-                                                    }}
-                                                    disabled={i === local.sections.chapters.length - 1}
+                                                    <button
+                                                        className={`px-3 py-1 text-purple-600 hover:bg-purple-50 rounded-md text-sm font-medium transition-all duration-200 hover:scale-105 disabled:opacity-50 ${aiGenerationState.chapters ? 'animate-pulse' : ''}`}
+                                                        onClick={() => generateChapterSummary(i)}
+                                                        disabled={aiGenerationState.chapters}
+                                                    >
+                                                        🤖 AI Summary
+                                                    </button>
+                                                </Tooltip>
+                                                <Tooltip
+                                                    text="Move this chapter up in the order"
+                                                    id={`chapter-up-${i}`}
                                                 >
-                                                    ⬇️
-                                                </button>
-                                                <button
-                                                    className="p-2 text-red-600 hover:bg-red-50 rounded-md transition-all duration-200 hover:scale-110"
-                                                    onClick={() => {
-                                                        const chapters = [...local.sections.chapters];
-                                                        chapters.splice(i, 1);
-                                                        const sections = { ...local.sections, chapters };
-                                                        const updated = { ...local, sections };
-                                                        setLocal(updated);
-                                                        onUpdate(updated);
-                                                    }}
+                                                    <button
+                                                        className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-md transition-all duration-200 hover:scale-110 disabled:opacity-50"
+                                                        onClick={() => {
+                                                            if (i === 0) return;
+                                                            const chapters = [...local.sections.chapters];
+                                                            const [item] = chapters.splice(i, 1);
+                                                            chapters.splice(i - 1, 0, item);
+                                                            const sections = { ...local.sections, chapters };
+                                                            const updated = { ...local, sections };
+                                                            setLocal(updated);
+                                                            onUpdate(updated);
+                                                        }}
+                                                        disabled={i === 0}
+                                                    >
+                                                        ⬆️
+                                                    </button>
+                                                </Tooltip>
+                                                <Tooltip
+                                                    text="Move this chapter down in the order"
+                                                    id={`chapter-down-${i}`}
                                                 >
-                                                    🗑️
-                                                </button>
+                                                    <button
+                                                        className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-md transition-all duration-200 hover:scale-110 disabled:opacity-50"
+                                                        onClick={() => {
+                                                            if (i === local.sections.chapters.length - 1) return;
+                                                            const chapters = [...local.sections.chapters];
+                                                            const [item] = chapters.splice(i, 1);
+                                                            chapters.splice(i + 1, 0, item);
+                                                            const sections = { ...local.sections, chapters };
+                                                            const updated = { ...local, sections };
+                                                            setLocal(updated);
+                                                            onUpdate(updated);
+                                                        }}
+                                                        disabled={i === local.sections.chapters.length - 1}
+                                                    >
+                                                        ⬇️
+                                                    </button>
+                                                </Tooltip>
+                                                <Tooltip
+                                                    text="Delete this chapter permanently"
+                                                    id={`chapter-delete-${i}`}
+                                                >
+                                                    <button
+                                                        className="p-2 text-red-600 hover:bg-red-50 rounded-md transition-all duration-200 hover:scale-110"
+                                                        onClick={() => {
+                                                            const chapters = [...local.sections.chapters];
+                                                            chapters.splice(i, 1);
+                                                            const sections = { ...local.sections, chapters };
+                                                            const updated = { ...local, sections };
+                                                            setLocal(updated);
+                                                            onUpdate(updated);
+                                                        }}
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                </Tooltip>
                                             </div>
                                         </div>
                                         {editingChapterIndex === i && (
-                                            <div className="mt-4">
+                                            <div className="mt-4 space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-sm text-emerald-600 font-medium">Chapter Notes</span>
+                                                    <Tooltip
+                                                        text={isExpanded(`chapter-notes-${i}`) ? "Collapse notes area" : "Expand notes area for better writing"}
+                                                        id={`expand-chapter-notes-${i}`}
+                                                    >
+                                                        <button
+                                                            onClick={() => toggleExpanded(`chapter-notes-${i}`)}
+                                                            className="text-emerald-600 hover:text-emerald-700 text-sm font-medium hover:bg-emerald-50 px-2 py-1 rounded transition-all"
+                                                        >
+                                                            {isExpanded(`chapter-notes-${i}`) ? '📐 Collapse' : '📏 Expand'}
+                                                        </button>
+                                                    </Tooltip>
+                                                </div>
                                                 <textarea
                                                     value={ch.notes}
                                                     onChange={(e) => {
@@ -414,7 +665,7 @@ export default function BookEditor({ book, onUpdate }: any) {
                                                     }}
                                                     className="w-full p-3 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all resize-none"
                                                     placeholder="Chapter summary and notes..."
-                                                    rows={4}
+                                                    rows={isExpanded(`chapter-notes-${i}`) ? 8 : 4}
                                                 />
                                             </div>
                                         )}
@@ -433,22 +684,52 @@ export default function BookEditor({ book, onUpdate }: any) {
 
                     {tab === 'locations' && (
                         <div className="space-y-4">
-                            <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+                            <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-lg border border-emerald-200">
                                 <h4 className="text-lg font-semibold text-emerald-800 flex items-center gap-2">
                                     🗺️ Locations ({local.sections.locations.length})
                                 </h4>
+                                <Tooltip
+                                    text="Use AI to automatically find and extract locations mentioned in your selected text"
+                                    id="locations-ai-generate"
+                                >
+                                    <button
+                                        className={`px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 active:scale-95 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 ${aiGenerationState.locations ? 'animate-pulse' : ''}`}
+                                        onClick={generateLocations}
+                                        disabled={aiGenerationState.locations}
+                                    >
+                                        🗺️ {aiGenerationState.locations ? 'Generating...' : 'AI Generate'}
+                                    </button>
+                                </Tooltip>
                             </div>
                             <div className="space-y-3">
                                 {local.sections.locations.map((l: any, i: number) => (
                                     <div key={i} className="p-4 bg-white border border-emerald-200 rounded-lg shadow-sm hover:shadow-md transition-all duration-200">
-                                        {l}
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex-1">
+                                                <h5 className="font-semibold text-amber-900 text-lg mb-2">{l.name}</h5>
+                                                <p className="text-emerald-700 text-sm">{l.notes}</p>
+                                            </div>
+                                            <button
+                                                className="px-3 py-1 text-red-600 hover:bg-red-50 rounded-md text-sm font-medium transition-all duration-200 hover:scale-105"
+                                                onClick={() => {
+                                                    const locations = [...local.sections.locations];
+                                                    locations.splice(i, 1);
+                                                    const sections = { ...local.sections, locations };
+                                                    const updated = { ...local, sections };
+                                                    setLocal(updated);
+                                                    onUpdate(updated);
+                                                }}
+                                            >
+                                                🗑️ Delete
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                                 {local.sections.locations.length === 0 && (
                                     <div className="text-center py-12 text-emerald-600">
                                         <div className="text-6xl mb-4">🗺️</div>
                                         <p className="text-lg font-medium">No locations yet</p>
-                                        <p className="text-sm opacity-75">Locations will appear here as you add them</p>
+                                        <p className="text-sm opacity-75">Use AI Generate to find locations in your text</p>
                                     </div>
                                 )}
                             </div>
@@ -457,15 +738,50 @@ export default function BookEditor({ book, onUpdate }: any) {
 
                     {tab === 'notes' && (
                         <div className="space-y-4">
-                            <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+                            <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-lg border border-emerald-200">
                                 <h4 className="text-lg font-semibold text-emerald-800 flex items-center gap-2">
                                     📓 General Notes
                                 </h4>
+                                <Tooltip
+                                    text="Use AI to generate insightful notes and analysis from your selected text"
+                                    id="notes-ai-generate"
+                                >
+                                    <button
+                                        className={`px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 active:scale-95 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 ${aiGenerationState.notes ? 'animate-pulse' : ''}`}
+                                        onClick={() => generateNotes()}
+                                        disabled={aiGenerationState.notes}
+                                    >
+                                        📝 {aiGenerationState.notes ? 'Generating...' : 'AI Generate'}
+                                    </button>
+                                </Tooltip>
                             </div>
-                            <div className="text-center py-12 text-emerald-600">
-                                <div className="text-6xl mb-4">📓</div>
-                                <p className="text-lg font-medium">Notes section coming soon</p>
-                                <p className="text-sm opacity-75">This will be a space for general book notes</p>
+                            <div className="p-4 bg-white border border-emerald-200 rounded-lg shadow-sm space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm text-emerald-600 font-medium">General Notes</span>
+                                    <Tooltip
+                                        text={isExpanded('general-notes') ? "Collapse notes area" : "Expand notes area for better writing"}
+                                        id="expand-general-notes"
+                                    >
+                                        <button
+                                            onClick={() => toggleExpanded('general-notes')}
+                                            className="text-emerald-600 hover:text-emerald-700 text-sm font-medium hover:bg-emerald-50 px-2 py-1 rounded transition-all"
+                                        >
+                                            {isExpanded('general-notes') ? '📐 Collapse' : '📏 Expand'}
+                                        </button>
+                                    </Tooltip>
+                                </div>
+                                <textarea
+                                    value={local.sections.notes || ''}
+                                    onChange={(e) => {
+                                        const sections = { ...local.sections, notes: e.target.value };
+                                        const updated = { ...local, sections };
+                                        setLocal(updated);
+                                        onUpdate(updated);
+                                    }}
+                                    placeholder="Write your notes here, or use AI Generate to create insights about your selected text..."
+                                    className="w-full p-3 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all resize-none"
+                                    rows={isExpanded('general-notes') ? 12 : 8}
+                                />
                             </div>
                         </div>
                     )}
@@ -476,17 +792,21 @@ export default function BookEditor({ book, onUpdate }: any) {
             <div className="rounded-xl border border-amber-200 p-6 bg-gradient-to-br from-amber-50 to-orange-50/50 shadow-lg">
                 <div className="flex items-center gap-3 mb-6">
                     <div className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center">
-                        <span className="text-white text-sm font-bold">🤖</span>
+                        <span className="text-white text-sm font-bold"></span>
                     </div>
                     <h3 className="text-lg font-semibold text-amber-900">AI Assistant</h3>
                     <div className="flex-1"></div>
-                    <button
-                        onClick={() => setShowAISettings(true)}
-                        className="px-3 py-1.5 bg-amber-200 text-amber-800 rounded-lg text-xs font-medium hover:bg-amber-300 transition-colors"
-                        title="AI Settings"
+                    <Tooltip
+                        text="Configure AI providers and API settings for content generation"
+                        id="ai-settings-button"
                     >
-                        ⚙️ Settings
-                    </button>
+                        <button
+                            onClick={() => setShowAISettings(true)}
+                            className="px-3 py-1.5 bg-amber-200 text-amber-800 rounded-lg text-xs font-medium hover:bg-amber-300 transition-colors"
+                        >
+                            ⚙️ Settings
+                        </button>
+                    </Tooltip>
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-100 rounded-full">
                         <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                         <span className="text-xs font-medium text-amber-700">Online</span>
@@ -505,8 +825,8 @@ export default function BookEditor({ book, onUpdate }: any) {
                         {chat.map((m, i) => (
                             <div key={i} className={`mb-4 flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 <div className={`max-w-[80%] p-3 rounded-lg ${m.role === 'user'
-                                        ? 'bg-emerald-600 text-white rounded-br-sm'
-                                        : 'bg-white border border-amber-200 text-amber-900 rounded-bl-sm'
+                                    ? 'bg-emerald-600 text-white rounded-br-sm'
+                                    : 'bg-white border border-amber-200 text-amber-900 rounded-bl-sm'
                                     }`}>
                                     <div className="text-xs opacity-75 mb-1">
                                         {m.role === 'user' ? 'You' : 'AI Assistant'}
