@@ -1,4 +1,3 @@
-export { default as AISettingsModal } from './AISettingsModal';
 export { default as BookEditor } from './BookEditor';
 export { default as BookList } from './BookList';
 // Rate limit displays removed from the main exports to keep the public API minimal

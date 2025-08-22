@@ -48,6 +48,7 @@ export interface Book {
     window: ContextWindow;
     uploads: BookUpload[];
     pages?: number;
+    cover?: string | null; // Base64 data URL or external URL
     createdAt: Date;
     updatedAt: Date;
 }

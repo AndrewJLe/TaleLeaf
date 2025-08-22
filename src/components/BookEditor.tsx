@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAIGeneration } from "../hooks/useAIGeneration";
 import { useBookActions } from "../hooks/useBookActions";
 import { useExpandableFields } from "../hooks/useExpandableFields";
 import { AIMessage, aiService, TokenEstimate } from "../lib/ai-service";
 import { BookEditorProps, TabType } from "../types/book";
-import AISettingsModal from "./AISettingsModal";
+// Replaced AISettingsModal with consolidated SettingsModal
+import { SettingsModal } from "./SettingsModal";
 import ContextWindow from "./ContextWindow";
 import { ChaptersSection } from "./sections/ChaptersSection";
 import { CharactersSection } from "./sections/CharactersSection";
@@ -28,11 +30,15 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     const [local, setLocal] = useState(book);
     const [message, setMessage] = useState("");
     const [chat, setChat] = useState<AIMessage[]>([]);
-    const [tab, setTab] = useState<TabType>('characters');
-    const [showAISettings, setShowAISettings] = useState(false);
+    const [isEditingPageText, setIsEditingPageText] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
+    const searchParams = useSearchParams();
+    useEffect(() => {
+        if (searchParams?.get('edit') === '1') setShowSettings(true);
+    }, [searchParams]);
     const [showContextWindow, setShowContextWindow] = useState(false);
     const [showRateLimits, setShowRateLimits] = useState(false);
-    const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
+    const [tab, setTab] = useState<TabType>('characters');
     const [currentDocumentPage, setCurrentDocumentPage] = useState(1);
     const [tokenConfirm, setTokenConfirm] = useState<{
         isOpen: boolean;
@@ -45,6 +51,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         action: '',
         onConfirm: () => { }
     });
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
 
     // Custom hooks for state management
     const { isExpanded, toggleExpanded } = useExpandableFields();
@@ -153,24 +160,61 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         });
     };
 
+    const currentUpload = local.uploads?.[0];
+    const currentPageText = (() => {
+        if (!currentUpload?.pages) return '';
+        return currentUpload.pages[currentDocumentPage - 1] || '';
+    })();
+
+    const saveCurrentPageText = (value: string) => {
+        if (!currentUpload?.pages) return;
+        const updatedUpload = { ...currentUpload, pages: [...currentUpload.pages] };
+        updatedUpload.pages[currentDocumentPage - 1] = value;
+        updateBook({ uploads: [updatedUpload] });
+    };
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 p-4">
-            <div className="max-w-7xl mx-auto">
-                {/* Header */}
-                <header className="mb-6">
-                    <div className="flex items-center gap-4 mb-4">
+            <div className="mx-auto max-w-[1800px]">
+                {/* Header (corrected) */}
+                <header className="mb-4">
+                    <div className="flex flex-wrap items-center gap-4 mb-3">
+                        <Link
+                            href="/profile"
+                            className="px-3 py-2 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800 transition-colors font-medium shadow-sm text-sm"
+                        >
+                            ← Library
+                        </Link>
                         <Link
                             href="/"
-                            className="px-4 py-2 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800 transition-colors font-medium shadow-sm"
+                            className="px-3 py-2 bg-emerald-100 text-emerald-800 rounded-lg hover:bg-emerald-200 transition-colors font-medium shadow-sm text-sm"
                         >
-                            ← Back to Library
+                            Home
                         </Link>
-                        <div className="flex-1">
-                            <h1 className="text-3xl font-bold text-gray-900">{local.title}</h1>
-                            <p className="text-gray-600">Reading companion and notes</p>
+                        <div className="flex-1 min-w-[260px]">
+                            {isEditingTitle ? (
+                                <input
+                                    autoFocus
+                                    value={local.title}
+                                    onChange={(e) => updateBook({ title: e.target.value })}
+                                    onBlur={() => setIsEditingTitle(false)}
+                                    className="px-3 py-2 border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent w-full"
+                                />
+                            ) : (
+                                <h1
+                                    className="text-2xl md:text-3xl font-bold text-gray-900 cursor-text"
+                                    onClick={() => setIsEditingTitle(true)}
+                                    title="Click to edit title"
+                                >
+                                    {local.title}
+                                </h1>
+                            )}
+                            <p className="text-gray-600 text-sm">Reading companion and notes</p>
                         </div>
-                        <div className="flex items-center gap-3">
-                            {/* Rate limit and token budget indicators removed to keep header minimal */}
+                        {local.cover && (
+                            <img src={local.cover} alt="Cover" className="h-16 w-12 object-cover rounded shadow border" />
+                        )}
+                        <div className="flex items-center gap-2">
                             <Tooltip text="Chat with AI" id="chat-toggle">
                                 <Button
                                     onClick={() => setShowContextWindow(!showContextWindow)}
@@ -181,18 +225,14 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                     <MessageSquareIcon size={20} />
                                 </Button>
                             </Tooltip>
-                            <Tooltip text="AI Settings" id="settings-button">
-                                <Button
-                                    onClick={() => setShowAISettings(true)}
-                                    variant="secondary"
-                                    size="sm"
-                                    className="p-2"
-                                >
+                            <Tooltip text="Settings" id="settings-button">
+                                <Button onClick={() => setShowSettings(true)} variant="secondary" size="sm" className="p-2">
                                     <SettingsIcon size={20} />
                                 </Button>
                             </Tooltip>
                         </div>
                     </div>
+                    {/* Removed inline reupload/cover inputs: now in Settings modal */}
                 </header>
 
                 {/* Split Layout */}
@@ -343,6 +383,17 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                     )}
                                 </div>
                             </div>
+                            {isEditingPageText && currentUpload?.pages && (
+                                <div className="rounded-xl border border-emerald-200 p-4 bg-emerald-50 shadow-inner">
+                                    <h3 className="text-sm font-semibold text-emerald-800 mb-2">Editing Page {currentDocumentPage}</h3>
+                                    <textarea
+                                        value={currentPageText}
+                                        onChange={(e) => saveCurrentPageText(e.target.value)}
+                                        className="w-full h-48 border border-emerald-300 rounded-lg p-3 font-mono text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white"
+                                    />
+                                    <p className="text-xs text-emerald-700 mt-2">Changes affect AI context immediately (not persisted to original file).</p>
+                                </div>
+                            )}
                         </div>
                     }
                     rightPanel={
@@ -357,10 +408,36 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                 />
             </div>
 
-            {/* AI Settings Modal */}
-            <AISettingsModal
-                isOpen={showAISettings}
-                onClose={() => setShowAISettings(false)}
+            {/* Settings Modal */}
+            <SettingsModal
+                isOpen={showSettings}
+                onClose={() => setShowSettings(false)}
+                book={local as any}
+                onUpdate={(partial) => updateBook(partial as any)}
+                onReupload={async (f) => { /* reuse logic by triggering existing handler */
+                    if (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')) {
+                        const [pdfModule, storageModule] = await Promise.all([
+                            import('../lib/pdf-utils'),
+                            import('../lib/pdf-storage')
+                        ]);
+                        const pdfInfo = await pdfModule.PDFUtils.getPDFInfo(f);
+                        let pages: string[] | undefined;
+                        try { pages = await pdfModule.PDFUtils.extractAllPageTexts(f, { maxPages: pdfInfo.pageCount }); } catch { }
+                        let indexedDBKey: string | undefined;
+                        const generatedId = crypto.randomUUID();
+                        try { await storageModule.pdfStorage.storePDF(generatedId, f.name, f); indexedDBKey = generatedId; } catch { }
+                        const newUpload = { id: crypto.randomUUID(), filename: f.name, type: 'pdf' as const, pageCount: pdfInfo.pageCount, pages, indexedDBKey, uploadedAt: new Date() };
+                        updateBook({ uploads: [newUpload], pages: pdfInfo.pageCount });
+                    } else {
+                        const text = await f.text();
+                        const pagesArr: string[] = []; for (let i = 0; i < text.length; i += 1800) pagesArr.push(text.slice(i, i + 1800));
+                        const newUpload = { id: crypto.randomUUID(), filename: f.name, type: 'text' as const, pageCount: pagesArr.length, pages: pagesArr, text, uploadedAt: new Date() };
+                        updateBook({ uploads: [newUpload], pages: pagesArr.length });
+                    }
+                }}
+                isEditingPageText={isEditingPageText}
+                toggleEditingPageText={() => setIsEditingPageText(p => !p)}
+                currentPage={currentDocumentPage}
             />
 
             {/* Rate Limits Modal */}
