@@ -1,19 +1,36 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { aiService } from "../lib/ai-service";
 
 export default function ContextWindow({
     window: win,
     pageCount,
+    book,
     onChange,
 }: {
     window: { start: number; end: number };
     pageCount: number;
+    book?: any;
     onChange: (start: number, end: number) => void;
 }) {
     const [active, setActive] = useState<'start' | 'end' | null>(null);
+    const [tokenCount, setTokenCount] = useState(0);
+    const [isChunked, setIsChunked] = useState(false);
 
     const trackRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (book) {
+            // Check if content needs chunking
+            const fullTokens = aiService.estimateContextTokens(book, win.start, win.end);
+            const chunkedText = aiService.extractContextTextChunked(book, win.start, win.end, 8000);
+            const chunkedTokens = aiService.estimateTokens(chunkedText);
+
+            setTokenCount(chunkedTokens);
+            setIsChunked(fullTokens > chunkedTokens);
+        }
+    }, [book, win.start, win.end]);
 
     useEffect(() => {
         const onUp = () => setActive(null);
@@ -44,7 +61,12 @@ export default function ContextWindow({
 
     return (
         <section className="mt-4 border-t pt-4">
-            <h3 className="font-medium">Context window (pages)</h3>
+            <div className="flex items-center justify-between">
+                <h3 className="font-medium">Context window (pages)</h3>
+                <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                    ~{tokenCount.toLocaleString()} tokens
+                </div>
+            </div>
             <div className="mt-2 text-sm text-slate-500">Page 1 — {pageCount}</div>
 
             <div className="mt-3">
@@ -118,8 +140,12 @@ export default function ContextWindow({
                         onChange={(e) => onChange(win.start, Math.min(pageCount, Math.max(Number(e.target.value) || pageCount, win.start)))}
                         className="w-24 border rounded px-2 py-1"
                     />
-                    <div className="text-xs text-slate-500 ml-4">AI will only use pages in this window</div>
+                    <div className="text-xs text-slate-500 ml-4">
+                        AI will only use pages in this window
+                    </div>
                 </div>
+
+                {/* Rate limit display removed for a cleaner, minimal interface */}
             </div>
         </section>
     );

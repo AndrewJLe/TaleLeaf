@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import BookEditorRefactored from '../../../components/BookEditorRefactored';
+import { useEffect, useState } from 'react';
+import BookEditor from '../../../components/BookEditor';
 import { ErrorBoundary } from '../../../components/ui/ErrorBoundary';
-import { Book } from '../../../types/book';
 import { STORAGE_KEYS } from '../../../constants';
+import { sanitizeBooksArrayForLocalStorage } from '../../../lib/storage';
+import { Book } from '../../../types/book';
 
 export default function BookPage() {
     const pathname = usePathname();
@@ -39,7 +40,9 @@ export default function BookPage() {
 
             const books: Book[] = JSON.parse(raw);
             const updated = books.map((b) => b.id === updatedBook.id ? updatedBook : b);
-            localStorage.setItem(STORAGE_KEYS.BOOKS, JSON.stringify(updated));
+            // sanitize large fields (PDF base64) before persisting
+            const sanitized = sanitizeBooksArrayForLocalStorage(updated);
+            localStorage.setItem(STORAGE_KEYS.BOOKS, JSON.stringify(sanitized));
             setBook(updatedBook);
         } catch (error) {
             console.error('Error updating book:', error);
@@ -84,7 +87,7 @@ export default function BookPage() {
 
     return (
         <ErrorBoundary>
-            <BookEditorRefactored book={book} onUpdate={handleBookUpdate} />
+            <BookEditor book={book} onUpdate={handleBookUpdate} />
         </ErrorBoundary>
     );
 }

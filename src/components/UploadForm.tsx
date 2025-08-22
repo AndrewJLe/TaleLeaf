@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { pdfStorage } from "../lib/pdf-storage";
+import { PDFUtils } from "../lib/pdf-utils";
+import { BookUpload } from "../types/book";
 
 type Props = {
     onAdd: (book: any) => void;
@@ -19,62 +22,90 @@ function splitIntoPages(text: string) {
 
 export default function UploadForm({ onAdd }: Props) {
     const [title, setTitle] = useState("");
-    const [estimatedPages, setEstimatedPages] = useState<number | undefined>(undefined);
     const [pastedText, setPastedText] = useState("");
-    const [extractedPages, setExtractedPages] = useState<string[] | undefined>(undefined);
+    const [processedUpload, setProcessedUpload] = useState<BookUpload | null>(null);
     const [loading, setLoading] = useState(false);
+    const [loadingMessage, setLoadingMessage] = useState<string>("");
     const [coverDataUrl, setCoverDataUrl] = useState<string | null>(null);
+    const [manualPageCount, setManualPageCount] = useState<number | undefined>(undefined);
+    const [showManualPageInput, setShowManualPageInput] = useState(false);
 
     async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
         const input = e.currentTarget;
         const file = input.files?.[0];
         if (!file) return;
+
         setLoading(true);
+        setLoadingMessage("Processing file...");
+
         try {
             if (file.type === "text/plain" || file.name.endsWith('.txt')) {
+                setLoadingMessage("Processing text file...");
                 const text = await file.text();
                 setPastedText(text);
+
                 const pageChunks = splitIntoPages(text.trim());
-                setExtractedPages(pageChunks);
-                setEstimatedPages(Math.max(1, pageChunks.length));
+                const upload: BookUpload = {
+                    id: crypto.randomUUID(),
+                    filename: file.name,
+                    type: 'text',
+                    pageCount: pageChunks.length,
+                    pages: pageChunks,
+                    text: text,
+                    uploadedAt: new Date()
+                };
+                setProcessedUpload(upload);
+
             } else if (file.type === "application/pdf" || file.name.endsWith('.pdf')) {
-                // parse PDF client-side using pdf.js loaded from CDN
-                const arrayBuffer = await file.arrayBuffer();
+                setLoadingMessage("Validating PDF...");
 
-                async function loadPdfJsFromCdn() {
-                    if ((window as any).pdfjsLib) return (window as any).pdfjsLib;
-                    await new Promise<void>((res, rej) => {
-                        const s = document.createElement('script');
-                        s.src = 'https://unpkg.com/pdfjs-dist@3.11.349/build/pdf.min.js';
-                        s.onload = () => res();
-                        s.onerror = () => rej(new Error('Failed to load pdf.js from CDN'));
-                        document.head.appendChild(s);
-                    });
-                    return (window as any).pdfjsLib;
+                // Validate PDF
+                const isValidPDF = await PDFUtils.validatePDF(file);
+                if (!isValidPDF) {
+                    throw new Error('Invalid PDF file. Please select a valid PDF document.');
                 }
 
-                const pdfjs = await loadPdfJsFromCdn();
-                pdfjs.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.349/build/pdf.worker.min.js';
+                setLoadingMessage("Extracting PDF information...");
 
-                const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
-                const pdf = await loadingTask.promise;
-                const pageChunks: string[] = [];
-                for (let i = 1; i <= pdf.numPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const content = await page.getTextContent();
-                    const strings = content.items.map((item: any) => item.str || '').join(' ');
-                    pageChunks.push(strings);
+                // Extract page count and metadata using PDF.js
+                const pdfInfo = await PDFUtils.getPDFInfo(file);
+
+                // If automatic detection gives a suspicious result for large files, show manual input
+                if (pdfInfo.pageCount === 1 && file.size > 1000000) {
+                    setShowManualPageInput(true);
+                    setManualPageCount(undefined);
                 }
-                setPastedText(pageChunks.join('\n\n'));
-                setExtractedPages(pageChunks);
-                setEstimatedPages(Math.max(1, pageChunks.length));
+
+                setLoadingMessage("Storing PDF...");
+
+                // Store PDF in IndexedDB
+                const uploadId = crypto.randomUUID();
+                await pdfStorage.storePDF(uploadId, file.name, file);
+
+                const upload: BookUpload = {
+                    id: uploadId,
+                    filename: file.name,
+                    type: 'pdf',
+                    pageCount: pdfInfo.pageCount,
+                    indexedDBKey: uploadId,
+                    uploadedAt: new Date()
+                };
+                setProcessedUpload(upload);
+
+                // Update pasted text to show PDF info
+                setPastedText(`PDF: ${file.name}\nAuto-detected pages: ${pdfInfo.pageCount}\nSize: ${(file.size / 1024 / 1024).toFixed(2)} MB${pdfInfo.title ? `\nTitle: ${pdfInfo.title}` : ''}${pdfInfo.author ? `\nAuthor: ${pdfInfo.author}` : ''}`);
+
             } else {
-                // unsupported file type for now
-                alert('Unsupported file type. Paste text, upload a .txt, or upload a .pdf file.');
+                throw new Error('Unsupported file type. Please upload a .txt or .pdf file.');
             }
+        } catch (error) {
+            console.error('File processing error:', error);
+            alert(`Failed to process file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            setProcessedUpload(null);
         } finally {
             setLoading(false);
-            // clear input using captured reference (avoid React pooled event null)
+            setLoadingMessage("");
+            // Clear input
             try { input.value = ''; } catch (_) { /* ignore */ }
         }
     }
@@ -82,16 +113,35 @@ export default function UploadForm({ onAdd }: Props) {
     function handleAdd() {
         if (!title) return alert('Please add a title');
 
-        // prefer pastedText if present; otherwise use estimatedPages from user
-        let pages = estimatedPages ?? 300;
-        const uploads: any[] = [];
-        if (extractedPages && extractedPages.length > 0) {
-            pages = extractedPages.length;
-            uploads.push({ id: crypto.randomUUID(), type: 'uploaded', pages: extractedPages });
+        // Calculate total pages from processed upload or pasted text
+        let pages = 300; // default
+        const uploads: BookUpload[] = [];
+
+        if (processedUpload) {
+            // Use manual page count if provided, otherwise use processed upload
+            const finalPageCount = manualPageCount || processedUpload.pageCount;
+
+            const updatedUpload: BookUpload = {
+                ...processedUpload,
+                pageCount: finalPageCount
+            };
+
+            pages = finalPageCount;
+            uploads.push(updatedUpload);
         } else if (pastedText && pastedText.trim().length > 0) {
+            // Create upload from pasted text
             const pageChunks = splitIntoPages(pastedText.trim());
+            const textUpload: BookUpload = {
+                id: crypto.randomUUID(),
+                filename: 'Pasted Text',
+                type: 'text',
+                pageCount: pageChunks.length,
+                pages: pageChunks,
+                text: pastedText,
+                uploadedAt: new Date()
+            };
             pages = pageChunks.length;
-            uploads.push({ id: crypto.randomUUID(), type: 'pasted', text: pastedText, pages: pageChunks });
+            uploads.push(textUpload);
         }
 
         const book = {
@@ -103,15 +153,22 @@ export default function UploadForm({ onAdd }: Props) {
                 characters: [],
                 chapters: [],
                 locations: [],
+                notes: "",
             },
             uploads,
             window: { start: 1, end: Math.min(50, pages) },
             createdAt: Date.now(),
         };
+
         onAdd(book);
+
+        // Reset form
         setTitle("");
         setPastedText("");
-        setEstimatedPages(undefined);
+        setProcessedUpload(null);
+        setCoverDataUrl(null);
+        setManualPageCount(undefined);
+        setShowManualPageInput(false);
     }
 
     return (
@@ -129,16 +186,49 @@ export default function UploadForm({ onAdd }: Props) {
                         />
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-emerald-900 mb-2">Estimated Pages (optional)</label>
-                        <input
-                            type="number"
-                            className="w-full border border-emerald-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                            value={estimatedPages ?? ''}
-                            onChange={(e) => setEstimatedPages(e.target.value ? Number(e.target.value) : undefined)}
-                            placeholder="300"
-                        />
-                    </div>
+                    {/* Show upload info if we have a processed upload */}
+                    {processedUpload && (
+                        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-lg">
+                                    {processedUpload.type === 'pdf' ? '📄' : '📝'}
+                                </span>
+                                <span className="font-medium text-emerald-800">
+                                    {processedUpload.filename}
+                                </span>
+                            </div>
+                            <div className="text-sm text-emerald-600">
+                                <span className="font-medium">
+                                    {manualPageCount || processedUpload.pageCount} pages
+                                </span>
+                                <span className="mx-2">•</span>
+                                <span className="capitalize">{processedUpload.type} document</span>
+                                {processedUpload.pageCount === 1 && processedUpload.type === 'pdf' && (
+                                    <span className="mx-2 text-amber-600">• Auto-detection may be inaccurate</span>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Manual page count input for PDFs with suspicious auto-detection */}
+                    {showManualPageInput && processedUpload?.type === 'pdf' && (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                            <label className="block text-sm font-medium text-amber-900 mb-2">
+                                Correct the page count (optional)
+                            </label>
+                            <input
+                                type="number"
+                                min="1"
+                                className="w-full border border-amber-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
+                                value={manualPageCount ?? ''}
+                                onChange={(e) => setManualPageCount(e.target.value ? Number(e.target.value) : undefined)}
+                                placeholder={`Auto-detected: ${processedUpload.pageCount} pages`}
+                            />
+                            <p className="text-xs text-amber-600 mt-1">
+                                💡 If the auto-detected page count (1 page) seems wrong for your PDF, enter the correct number here.
+                            </p>
+                        </div>
+                    )}
 
                     <div>
                         <label className="block text-sm font-medium text-emerald-900 mb-2">Book Cover (optional)</label>
@@ -198,12 +288,19 @@ export default function UploadForm({ onAdd }: Props) {
                     {loading && (
                         <>
                             <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
-                            <span className="text-sm text-emerald-700 font-medium">Processing file...</span>
+                            <span className="text-sm text-emerald-700 font-medium">
+                                {loadingMessage || "Processing file..."}
+                            </span>
                         </>
                     )}
-                    {extractedPages && (
+                    {processedUpload && !loading && (
                         <span className="text-sm text-emerald-700">
-                            ✅ Extracted {extractedPages.length} pages
+                            ✅ Ready to add: {manualPageCount || processedUpload.pageCount} pages from {processedUpload.filename}
+                        </span>
+                    )}
+                    {pastedText && !processedUpload && !loading && (
+                        <span className="text-sm text-emerald-700">
+                            ✅ Ready to add: {splitIntoPages(pastedText.trim()).length} pages from pasted text
                         </span>
                     )}
                 </div>

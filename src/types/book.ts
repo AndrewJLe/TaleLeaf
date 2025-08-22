@@ -28,7 +28,11 @@ export interface PageData {
 export interface BookUpload {
     id: string;
     filename: string;
-    pages: string[];
+    type: 'pdf' | 'text';
+    pageCount: number;
+    indexedDBKey?: string; // For PDF storage in IndexedDB
+    pages?: string[]; // Only for text content (chunked pages)
+    text?: string; // For pasted text content
     uploadedAt: Date;
 }
 

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { UploadForm, BookList } from '../../components';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { BookList, UploadForm } from '../../components';
+import { sanitizeBooksArrayForLocalStorage } from '../../lib/storage';
 
 export default function ProfilePage() {
     const [books, setBooks] = useState<any[]>([]);
@@ -14,7 +15,18 @@ export default function ProfilePage() {
     }, []);
 
     useEffect(() => {
-        localStorage.setItem('taleleaf:books', JSON.stringify(books));
+        try {
+            const sanitized = sanitizeBooksArrayForLocalStorage(books);
+            localStorage.setItem('taleleaf:books', JSON.stringify(sanitized));
+        } catch (e) {
+            // Fallback: attempt to save raw books if sanitization unexpectedly fails
+            try {
+                localStorage.setItem('taleleaf:books', JSON.stringify(books));
+            } catch (err) {
+                // Ignore storage errors here; quota errors are warned elsewhere.
+                console.warn('Failed to persist books to localStorage', err);
+            }
+        }
     }, [books]);
 
     return (
@@ -48,8 +60,8 @@ export default function ProfilePage() {
                     <div className="flex items-center gap-3">
                         <button
                             className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 border ${showUploader
-                                    ? 'bg-amber-600 text-white border-amber-600 hover:bg-amber-700'
-                                    : 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'
+                                ? 'bg-amber-600 text-white border-amber-600 hover:bg-amber-700'
+                                : 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'
                                 } hover:scale-105 shadow-md hover:shadow-lg flex items-center gap-2`}
                             onClick={() => setShowUploader((s) => !s)}
                         >

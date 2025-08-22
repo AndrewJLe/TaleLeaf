@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
-import { Book, Character, Chapter, Location, AIGenerationState } from '../types/book';
 import { aiService } from '../lib/ai-service';
+import { AIGenerationState, Book, Chapter, Character, Location } from '../types/book';
 
 export const useBookActions = (
     book: Book,
@@ -93,8 +93,7 @@ export const useBookActions = (
     const generateCharacters = useCallback(async () => {
         try {
             setGenerationLoading('characters', true);
-            const contextText = aiService.extractContextText(book, book.window.start, book.window.end);
-            const aiCharacters = await aiService.generateCharacters(contextText);
+            const aiCharacters = await aiService.generateCharactersFromBook(book, book.window.start, book.window.end);
 
             if (aiCharacters.length > 0) {
                 const existingCharacters = book.sections.characters;

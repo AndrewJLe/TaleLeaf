@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { AI_PROVIDERS, AIProvider, aiService, AISettings } from '../lib/ai-service';
+import { useEffect, useState } from 'react';
+import { AI_PROVIDERS, AIProvider, aiService, AISettings, TokenBudget } from '../lib/ai-service';
 
 interface Props {
     isOpen: boolean;
@@ -12,11 +12,13 @@ export default function AISettingsModal({ isOpen, onClose }: Props) {
     const [settings, setSettings] = useState<AISettings>({ provider: 'openai-gpt4o-mini', apiKeys: {} });
     const [tempApiKey, setTempApiKey] = useState('');
     const [selectedProvider, setSelectedProvider] = useState<AIProvider | null>(null);
+    const [budget, setBudget] = useState<TokenBudget>(aiService.getTokenBudget());
 
     useEffect(() => {
         if (isOpen) {
             const currentSettings = aiService.getSettings();
             setSettings(currentSettings);
+            setBudget(aiService.getTokenBudget());
             const provider = AI_PROVIDERS.find(p => p.id === currentSettings.provider);
             setSelectedProvider(provider || AI_PROVIDERS[0]);
         }
@@ -34,6 +36,7 @@ export default function AISettingsModal({ isOpen, onClose }: Props) {
         }
 
         aiService.updateSettings(updatedSettings);
+        aiService.updateTokenBudget(budget);
         setSettings(updatedSettings);
         setTempApiKey('');
         onClose();
@@ -140,6 +143,63 @@ export default function AISettingsModal({ isOpen, onClose }: Props) {
                             </div>
                         </div>
                     )}
+
+                    {/* Budget Settings */}
+                    <div>
+                        <h3 className="text-lg font-semibold text-emerald-900 mb-4">Budget Limits</h3>
+                        <div className="grid md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-emerald-900 mb-2">Daily Limit</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-emerald-600">$</span>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={budget.dailyLimit}
+                                        onChange={(e) => setBudget({ ...budget, dailyLimit: parseFloat(e.target.value) || 0 })}
+                                        className="w-full pl-8 pr-4 py-3 border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                    />
+                                </div>
+                                <p className="text-xs text-emerald-600 mt-1">Maximum spend per day</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-emerald-900 mb-2">Monthly Limit</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-emerald-600">$</span>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={budget.monthlyLimit}
+                                        onChange={(e) => setBudget({ ...budget, monthlyLimit: parseFloat(e.target.value) || 0 })}
+                                        className="w-full pl-8 pr-4 py-3 border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                    />
+                                </div>
+                                <p className="text-xs text-emerald-600 mt-1">Maximum spend per month</p>
+                            </div>
+                        </div>
+                        <div className="mt-4">
+                            <label className="block text-sm font-medium text-emerald-900 mb-2">Warning Threshold</label>
+                            <div className="relative">
+                                <input
+                                    type="range"
+                                    min="0.5"
+                                    max="1"
+                                    step="0.05"
+                                    value={budget.warningThreshold}
+                                    onChange={(e) => setBudget({ ...budget, warningThreshold: parseFloat(e.target.value) })}
+                                    className="w-full"
+                                />
+                                <div className="flex justify-between text-xs text-emerald-600 mt-1">
+                                    <span>50%</span>
+                                    <span className="font-medium">{Math.round(budget.warningThreshold * 100)}%</span>
+                                    <span>100%</span>
+                                </div>
+                            </div>
+                            <p className="text-xs text-emerald-600 mt-1">Show warning when reaching this percentage of daily/monthly limit</p>
+                        </div>
+                    </div>
 
                     {/* Free Tier Info */}
                     {selectedProvider?.tier === 'free' && (
