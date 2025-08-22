@@ -309,16 +309,7 @@ class AIService {
         const costs = this.getProviderCosts();
         const providerCost = costs[this.settings.provider];
 
-        const systemPromptTokens = this.estimateTokens(`You are a helpful reading assistant. Answer questions about the book based ONLY on the provided context. Never reveal information outside the given context to avoid spoilers.
-
-Context from book (pages in current window):
-${contextText}
-
-Guidelines:
-- Only use information from the provided context
-- If asked about events outside the context, politely say you don't have that information yet
-- Be helpful and engaging while respecting spoiler boundaries
-- Provide detailed analysis when possible using available context`);
+    const systemPromptTokens = this.estimateTokens(this.buildSystemPrompt(contextText));
 
         const userPromptTokens = this.estimateTokens(promptText);
         const inputTokens = systemPromptTokens + userPromptTokens;
@@ -467,16 +458,7 @@ Guidelines:
         const modelName = model === 'openai-gpt4o' ? 'gpt-4o' : 'gpt-4o-mini';
 
         // Estimate tokens for this request
-        const systemPrompt = `You are a helpful reading assistant. Answer questions about the book based ONLY on the provided context. Never reveal information outside the given context to avoid spoilers.
-
-Context from book (pages in current window):
-${contextText}
-
-Guidelines:
-- Only use information from the provided context
-- If asked about events outside the context, politely say you don't have that information yet
-- Be helpful and engaging while respecting spoiler boundaries
-- Provide detailed analysis when possible using available context`;
+    const systemPrompt = this.buildSystemPrompt(contextText);
 
         const estimatedInputTokens = this.estimateTokens(systemPrompt + messages.map(m => m.content).join(''));
         const estimatedOutputTokens = 500; // max_tokens setting
@@ -553,10 +535,7 @@ Guidelines:
 
         try {
             // Convert messages to Anthropic format
-            const systemPrompt = `You are a helpful reading assistant. Answer questions about the book based ONLY on the provided context. Never reveal information outside the given context to avoid spoilers.
-
-Context from book (pages in current window):
-${contextText}`;
+            const systemPrompt = this.buildSystemPrompt(contextText);
 
             const userMessages = messages.filter(m => m.role === 'user');
             const lastUserMessage = userMessages[userMessages.length - 1]?.content || '';
@@ -602,9 +581,10 @@ ${contextText}`;
         // Extract pages within the window (1-indexed)
         const startIdx = Math.max(0, windowStart - 1);
         const endIdx = Math.min(upload.pages.length, windowEnd);
-
         const contextPages = upload.pages.slice(startIdx, endIdx);
-        return contextPages.join('\n\n');
+        return contextPages
+            .map((p: string, i: number) => `=== Page ${startIdx + i + 1} ===\n${p && p.trim().length ? p : '(No text extracted for this page)'}\n`)
+            .join('\n');
     }
 
     extractContextTextChunked(book: any, windowStart: number, windowEnd: number, maxTokens: number = 8000): string {
@@ -664,6 +644,25 @@ ${contextText}`;
 
         // For character generation, prioritize the first chunk (usually has character introductions)
         return chunks[0] || fullText.substring(0, targetChars);
+    }
+
+    private buildSystemPrompt(contextText: string): string {
+        return `You are a helpful reading assistant. Answer questions about the book based ONLY on the provided context pages below. Never reveal or assume information outside the given context to avoid spoilers.
+
+Each page is delimited like: === Page N ===. When the user asks about a specific page number X:
+- If Page X is present, reference ONLY that page's content and summarize/answer.
+- If Page X is not in the provided context, respond that you do not have Page X yet.
+- If the user asks generally (not page-specific), you may synthesize across the included pages.
+- Do NOT guess content from pages not provided.
+
+Context pages:
+${contextText}
+
+Guidelines:
+- Only use information from the provided context
+- If asked about events outside the context, politely say you don't have that information yet
+- Be helpful and engaging while respecting spoiler boundaries
+- Provide detailed analysis when possible using available context`;
     }
 
     estimateContextTokens(book: any, windowStart: number, windowEnd: number): number {

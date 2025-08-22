@@ -5,16 +5,24 @@ export function sanitizeBookForLocalStorage(book: any) {
     copy.uploads = copy.uploads.map((u: any) => {
       const upload = { ...u };
 
-      // For PDF uploads, remove IndexedDB reference but keep metadata
-      if (upload.type === 'pdf' && upload.indexedDBKey) {
+      // For PDF uploads, KEEP truncated page texts so AI context works offline.
+      if (upload.type === 'pdf') {
+        if (Array.isArray(upload.pages)) {
+          upload.pages = upload.pages.map((p: any) => {
+            if (typeof p === 'string' && p.length > 4000) {
+              return p.slice(0, 4000) + '...';
+            }
+            return p;
+          });
+        }
         return {
           id: upload.id,
           filename: upload.filename,
-          type: upload.type,
+            type: upload.type,
           pageCount: upload.pageCount,
           uploadedAt: upload.uploadedAt,
-          // indexedDBKey is preserved so we can still load from IndexedDB
-          indexedDBKey: upload.indexedDBKey
+          indexedDBKey: upload.indexedDBKey,
+          pages: upload.pages // may be undefined if extraction failed
         };
       }
 

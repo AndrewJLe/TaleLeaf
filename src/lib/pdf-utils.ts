@@ -270,6 +270,56 @@ export class PDFUtils {
   static revokeBlobURL(url: string): void {
     URL.revokeObjectURL(url);
   }
+
+  /**
+   * Extract text for all (or a limited number of) pages in a PDF.
+   * Returns an array where index = pageIndex (0-based) and value = text content.
+   * For large PDFs you can pass maxPages to limit extraction for performance.
+   */
+  static async extractAllPageTexts(
+    file: File | ArrayBuffer,
+    opts: { maxPages?: number; onProgress?: (current: number, total: number) => void } = {}
+  ): Promise<string[]> {
+    const { maxPages, onProgress } = opts;
+    const arrayBuffer = file instanceof File ? await file.arrayBuffer() : file;
+    const texts: string[] = [];
+    try {
+      const pdfjsLib = await PDFJSDynamicLoader.load();
+      const loadingTask = pdfjsLib.getDocument({
+        data: arrayBuffer,
+        disableFontFace: true,
+        isEvalSupported: false,
+        stopAtErrors: false,
+        useWorkerFetch: false,
+      });
+      const pdf = await loadingTask.promise;
+      const total = pdf.numPages;
+      const targetTotal = maxPages ? Math.min(total, maxPages) : total;
+      for (let i = 1; i <= targetTotal; i++) {
+        try {
+          const page = await pdf.getPage(i);
+            // getTextContent returns an object with items containing strings.
+          const content = await page.getTextContent();
+          const pageText = content.items
+            .map((it: any) => (typeof it.str === 'string' ? it.str : ''))
+            .join(' ') // join with space to avoid word collisions
+            .replace(/\s+/g, ' ') // normalize whitespace
+            .trim();
+          texts[i - 1] = pageText;
+        } catch (pageErr) {
+          console.warn(`Failed to extract page ${i}:`, pageErr);
+          texts[i - 1] = '';
+        }
+        if (onProgress) onProgress(i, targetTotal);
+      }
+      pdf.destroy();
+      return texts;
+    } catch (err) {
+      console.error('PDF page text extraction failed:', err);
+      if (texts.length > 0) return texts; // partial
+      throw err;
+    }
+  }
 }
 
 export default PDFUtils;

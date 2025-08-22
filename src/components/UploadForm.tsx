@@ -76,6 +76,23 @@ export default function UploadForm({ onAdd }: Props) {
                     setManualPageCount(undefined);
                 }
 
+                setLoadingMessage("Extracting PDF page text (may take a moment)...");
+
+                // Extract text for all pages but cap at e.g. first 800 pages for performance; adjust as needed
+                let pageTexts: string[] = [];
+                try {
+                    pageTexts = await PDFUtils.extractAllPageTexts(file, {
+                        maxPages: pdfInfo.pageCount, // attempt all pages
+                        onProgress: (current, total) => {
+                            if (current % 25 === 0) {
+                                setLoadingMessage(`Extracting text: page ${current}/${total}...`);
+                            }
+                        }
+                    });
+                } catch (textErr) {
+                    console.warn('PDF text extraction failed, continuing without page texts.', textErr);
+                }
+
                 setLoadingMessage("Storing PDF...");
 
                 // Store PDF in IndexedDB
@@ -88,6 +105,8 @@ export default function UploadForm({ onAdd }: Props) {
                     type: 'pdf',
                     pageCount: pdfInfo.pageCount,
                     indexedDBKey: uploadId,
+                    // Store page texts only if we successfully extracted
+                    pages: pageTexts.length ? pageTexts : undefined,
                     uploadedAt: new Date()
                 };
                 setProcessedUpload(upload);

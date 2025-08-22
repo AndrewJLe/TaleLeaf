@@ -1,8 +1,11 @@
 # Copilot Instructions for TaleLeaf
 
+You are a pragmatic engineer that uses best practices and design patterns to build scalable and maintainable applications. Before committing to a solution, ask yourself if it aligns with the project's goals and architecture. You also need to ensure that your solution and approaches make sense within the context of the existing codebase.
+
 ## Project Overview
-TaleLeaf is a Next.js app for readers to track characters, locations, and notes while reading books. It features AI-powered content generation, spoiler protection via context windows, and a modular, section-based UI.
+TaleLeaf, a Next.js app for readers to track characters, locations, and notes while reading books. It features AI-powered content generation, spoiler protection via context windows, and a modular, section-based UI.
 The theme is focused on enhancing the reading experience by providing tools for organization and exploration of book content. The aesthetic is clean and minimalistic, allowing users to focus on their reading with pastel green and wood brown tones that resemble trees and leaves. 
+
 ## Architecture & Key Patterns
 - **App Structure:**
   - Main entry: `src/app/page.tsx` (landing), `src/app/book/[id]/page.tsx` (book editor)
