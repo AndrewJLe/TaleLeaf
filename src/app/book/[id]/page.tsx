@@ -1,26 +1,50 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import { BookEditor } from '../../../components';
+import { usePathname } from 'next/navigation';
+import BookEditorRefactored from '../../../components/BookEditorRefactored';
+import { ErrorBoundary } from '../../../components/ui/ErrorBoundary';
+import { Book } from '../../../types/book';
+import { STORAGE_KEYS } from '../../../constants';
 
 export default function BookPage() {
     const pathname = usePathname();
     const id = pathname?.split('/').pop() || '';
-    const [book, setBook] = useState<any | null>(null);
+    const [book, setBook] = useState<Book | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const raw = localStorage.getItem('taleleaf:books');
+        const raw = localStorage.getItem(STORAGE_KEYS.BOOKS);
         if (!raw) {
             setLoading(false);
             return;
         }
-        const books = JSON.parse(raw);
-        const found = books.find((b: any) => b.id === id);
-        setBook(found || null);
-        setLoading(false);
+
+        try {
+            const books: Book[] = JSON.parse(raw);
+            const found = books.find((b) => b.id === id);
+            setBook(found || null);
+        } catch (error) {
+            console.error('Error parsing books from localStorage:', error);
+            setBook(null);
+        } finally {
+            setLoading(false);
+        }
     }, [id]);
+
+    const handleBookUpdate = (updatedBook: Book) => {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEYS.BOOKS);
+            if (!raw) return;
+
+            const books: Book[] = JSON.parse(raw);
+            const updated = books.map((b) => b.id === updatedBook.id ? updatedBook : b);
+            localStorage.setItem(STORAGE_KEYS.BOOKS, JSON.stringify(updated));
+            setBook(updatedBook);
+        } catch (error) {
+            console.error('Error updating book:', error);
+        }
+    };
 
     if (loading) {
         return (
@@ -59,26 +83,8 @@ export default function BookPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-emerald-25 to-amber-50/30 p-8">
-            {/* Background Pattern */}
-            <div className="absolute inset-0 opacity-3">
-                <div className="absolute top-20 right-20 w-40 h-40 bg-emerald-600 rounded-full blur-3xl"></div>
-                <div className="absolute bottom-40 left-20 w-32 h-32 bg-amber-600 rounded-full blur-3xl"></div>
-            </div>
-
-            <div className="relative">
-                <BookEditor
-                    book={book}
-                    onUpdate={(u: any) => {
-                        const raw = localStorage.getItem('taleleaf:books');
-                        if (!raw) return;
-                        const books = JSON.parse(raw);
-                        const updated = books.map((b: any) => b.id === u.id ? u : b);
-                        localStorage.setItem('taleleaf:books', JSON.stringify(updated));
-                        setBook(u);
-                    }}
-                />
-            </div>
-        </div>
+        <ErrorBoundary>
+            <BookEditorRefactored book={book} onUpdate={handleBookUpdate} />
+        </ErrorBoundary>
     );
 }
