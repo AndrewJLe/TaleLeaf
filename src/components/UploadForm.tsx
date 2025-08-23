@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { pdfStorage } from "../lib/pdf-storage";
 import { PDFUtils } from "../lib/pdf-utils";
+import { supabaseClient } from "../lib/supabase-client";
+import { isSupabaseEnabled } from "../lib/supabase-enabled";
+import { uploadPDF } from "../lib/supabase-storage";
 import { BookUpload } from "../types/book";
 
 type Props = {
@@ -129,7 +132,7 @@ export default function UploadForm({ onAdd }: Props) {
         }
     }
 
-    function handleAdd() {
+    async function handleAdd() {
         if (!title) return alert('Please add a title');
 
         // Calculate total pages from processed upload or pasted text
@@ -163,8 +166,32 @@ export default function UploadForm({ onAdd }: Props) {
             uploads.push(textUpload);
         }
 
+        const bookId = crypto.randomUUID();
+        let pdfPath: string | undefined;
+        // If we have a processed PDF upload and supabase is enabled + user logged in, upload original PDF file again for cloud sync.
+        if (isSupabaseEnabled && processedUpload?.type === 'pdf' && supabaseClient) {
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                if (session) {
+                    // Retrieve blob from IndexedDB
+                    const origBlob = await pdfStorage.getPDF(processedUpload.id);
+                    if (origBlob) {
+                        setLoading(true);
+                        setLoadingMessage('Uploading PDF to cloud...');
+                        pdfPath = await uploadPDF(session.user.id, bookId, origBlob as Blob, processedUpload.filename);
+                        setLoadingMessage('Finalizing book...');
+                    }
+                }
+            } catch (e) {
+                console.warn('PDF cloud upload failed (continuing local only)', e);
+            } finally {
+                setLoading(false);
+                setLoadingMessage('');
+            }
+        }
+
         const book = {
-            id: crypto.randomUUID(),
+            id: bookId,
             title,
             pages,
             cover: coverDataUrl,
@@ -177,9 +204,11 @@ export default function UploadForm({ onAdd }: Props) {
             uploads,
             window: { start: 1, end: Math.min(50, pages) },
             createdAt: Date.now(),
+            pdfPath,
+            pdfPageCount: processedUpload?.type === 'pdf' ? processedUpload.pageCount : undefined
         };
 
-        onAdd(book);
+        await onAdd(book);
 
         // Reset form
         setTitle("");

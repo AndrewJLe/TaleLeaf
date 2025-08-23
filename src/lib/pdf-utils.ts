@@ -298,7 +298,7 @@ export class PDFUtils {
       for (let i = 1; i <= targetTotal; i++) {
         try {
           const page = await pdf.getPage(i);
-            // getTextContent returns an object with items containing strings.
+          // getTextContent returns an object with items containing strings.
           const content = await page.getTextContent();
           const pageText = content.items
             .map((it: any) => (typeof it.str === 'string' ? it.str : ''))

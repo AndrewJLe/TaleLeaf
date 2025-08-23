@@ -9,8 +9,16 @@ type Book = {
     createdAt: number;
     cover?: string;
 };
+interface BookListProps {
+    books: any[];
+    selectedId?: string | null;
+    onSelect?: (id: string) => void;
+    onDelete: (id: string) => void;
+    remoteIds?: Set<string>;
+    unsyncedIds?: Set<string>;
+}
 
-export default function BookList({ books, selectedId, onSelect, onDelete }: any) {
+export default function BookList({ books, selectedId, onSelect, onDelete, remoteIds, unsyncedIds }: BookListProps) {
     if (books.length === 0) {
         return null; // Handle empty state in parent component
     }
@@ -44,14 +52,16 @@ export default function BookList({ books, selectedId, onSelect, onDelete }: any)
 
                                 {/* Book Info */}
                                 <div className="space-y-2">
-                                    <h4 className="font-semibold text-emerald-900 line-clamp-2 group-hover:text-emerald-700 transition-colors">
-                                        {book.title}
+                                    <h4 className="font-semibold text-emerald-900 line-clamp-2 group-hover:text-emerald-700 transition-colors flex items-start gap-2">
+                                        <span className="flex-1">{book.title}</span>
+                                        {remoteIds?.has(book.id) && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">Cloud</span>}
+                                        {unsyncedIds?.has(book.id) && !remoteIds?.has(book.id) && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">Local</span>}
                                     </h4>
-                                    <div className="flex items-center gap-2 text-sm text-emerald-600">
-                                        <span className="flex items-center gap-1">
-                                            📄 {book.pages} pages
-                                        </span>
-                                    </div>
+                                    {book.pages !== undefined && (
+                                        <div className="flex items-center gap-2 text-sm text-emerald-600">
+                                            <span className="flex items-center gap-1">📄 {book.pages} pages</span>
+                                        </div>
+                                    )}
                                     <div className="text-xs text-emerald-500">
                                         Added {new Date(book.createdAt).toLocaleDateString()}
                                     </div>

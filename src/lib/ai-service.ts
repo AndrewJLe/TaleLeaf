@@ -309,7 +309,7 @@ class AIService {
         const costs = this.getProviderCosts();
         const providerCost = costs[this.settings.provider];
 
-    const systemPromptTokens = this.estimateTokens(this.buildSystemPrompt(contextText));
+        const systemPromptTokens = this.estimateTokens(this.buildSystemPrompt(contextText));
 
         const userPromptTokens = this.estimateTokens(promptText);
         const inputTokens = systemPromptTokens + userPromptTokens;
@@ -458,7 +458,7 @@ class AIService {
         const modelName = model === 'openai-gpt4o' ? 'gpt-4o' : 'gpt-4o-mini';
 
         // Estimate tokens for this request
-    const systemPrompt = this.buildSystemPrompt(contextText);
+        const systemPrompt = this.buildSystemPrompt(contextText);
 
         const estimatedInputTokens = this.estimateTokens(systemPrompt + messages.map(m => m.content).join(''));
         const estimatedOutputTokens = 500; // max_tokens setting

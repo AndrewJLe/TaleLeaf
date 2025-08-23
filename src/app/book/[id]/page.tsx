@@ -5,7 +5,11 @@ import { useEffect, useState } from 'react';
 import BookEditor from '../../../components/BookEditor';
 import { ErrorBoundary } from '../../../components/ui/ErrorBoundary';
 import { STORAGE_KEYS } from '../../../constants';
+import { pdfStorage } from '../../../lib/pdf-storage';
 import { sanitizeBooksArrayForLocalStorage } from '../../../lib/storage';
+import { supabaseClient } from '../../../lib/supabase-client';
+import { isSupabaseEnabled } from '../../../lib/supabase-enabled';
+import { downloadPDF, getSignedPDFUrl } from '../../../lib/supabase-storage';
 import { Book } from '../../../types/book';
 
 export default function BookPage() {
@@ -15,22 +19,113 @@ export default function BookPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const raw = localStorage.getItem(STORAGE_KEYS.BOOKS);
-        if (!raw) {
-            setLoading(false);
-            return;
-        }
-
-        try {
-            const books: Book[] = JSON.parse(raw);
-            const found = books.find((b) => b.id === id);
-            setBook(found || null);
-        } catch (error) {
-            console.error('Error parsing books from localStorage:', error);
-            setBook(null);
-        } finally {
-            setLoading(false);
-        }
+        let cancelled = false;
+        (async () => {
+            const raw = localStorage.getItem(STORAGE_KEYS.BOOKS);
+            if (raw) {
+                try {
+                    const books: Book[] = JSON.parse(raw);
+                    const found = books.find((b) => b.id === id);
+                    if (found) {
+                        if (!cancelled) { setBook(found); setLoading(false); }
+                        return; // already have it locally
+                    }
+                } catch (e) {
+                    console.warn('Failed to parse local books', e);
+                }
+            }
+            // Not found locally: attempt remote fetch if Supabase enabled
+            if (isSupabaseEnabled && supabaseClient) {
+                try {
+                    const { data: { session } } = await supabaseClient.auth.getSession();
+                    if (!session) { if (!cancelled) setLoading(false); return; }
+                    const { data: bookRow, error: bookErr } = await supabaseClient
+                        .from('books')
+                        .select('*')
+                        .eq('id', id)
+                        .maybeSingle();
+                    if (bookErr) throw bookErr;
+                    if (!bookRow) { if (!cancelled) setLoading(false); return; }
+                    // Fetch sections
+                    const { data: sectionRows, error: secErr } = await supabaseClient
+                        .from('sections')
+                        .select('*')
+                        .eq('book_id', id);
+                    if (secErr) throw secErr;
+                    type SectionRow = { type: string; data: any };
+                    const sectionsMap: { characters: any[]; chapters: any[]; locations: any[]; notes: string } = { characters: [], chapters: [], locations: [], notes: '' };
+                    (sectionRows as SectionRow[] | null)?.forEach((r: SectionRow) => {
+                        if (r.type === 'characters') sectionsMap.characters = (r.data?.items) || [];
+                        if (r.type === 'chapters') sectionsMap.chapters = (r.data?.items) || [];
+                        if (r.type === 'locations') sectionsMap.locations = (r.data?.items) || [];
+                        if (r.type === 'notes') sectionsMap.notes = (r.data?.content) || '';
+                    });
+                    let uploads: any[] = [];
+                    if (bookRow.pdf_path) {
+                        try {
+                            await getSignedPDFUrl(bookRow.pdf_path, 60); // ensure path is valid
+                            const pdfBlob = await downloadPDF(bookRow.pdf_path);
+                            const uploadId = crypto.randomUUID();
+                            await pdfStorage.storePDF(uploadId, (bookRow.title || 'Book') + '.pdf', pdfBlob);
+                            uploads.push({
+                                id: uploadId,
+                                filename: (bookRow.title || 'Book') + '.pdf',
+                                type: 'pdf' as const,
+                                pageCount: bookRow.pdf_page_count || bookRow.window_end || bookRow.window_start || 0,
+                                indexedDBKey: uploadId,
+                                uploadedAt: new Date()
+                            });
+                        } catch (e) {
+                            console.warn('Failed to download remote PDF, using placeholder', e);
+                        }
+                    }
+                    if (uploads.length === 0) {
+                        uploads.push({
+                            id: crypto.randomUUID(),
+                            filename: 'Cloud Placeholder',
+                            type: 'text' as const,
+                            pageCount: 1,
+                            pages: ['This cloud book has no stored PDF. Re-upload locally to enable full viewing.'],
+                            uploadedAt: new Date()
+                        });
+                    }
+                    const remoteBook: Book = {
+                        id: bookRow.id,
+                        title: bookRow.title || 'Untitled',
+                        sections: sectionsMap as any,
+                        window: {
+                            start: bookRow.window_start || 1,
+                            end: bookRow.window_end || bookRow.window_start || 1
+                        },
+                        uploads,
+                        pages: bookRow.window_end || bookRow.window_start || 0,
+                        cover: bookRow.cover_url || null,
+                        pdfPath: bookRow.pdf_path || undefined,
+                        pdfPageCount: bookRow.pdf_page_count || undefined,
+                        createdAt: new Date(bookRow.created_at || Date.now()),
+                        updatedAt: new Date(bookRow.updated_at || Date.now())
+                    };
+                    if (!cancelled) {
+                        setBook(remoteBook);
+                        // Persist into local storage so future loads are instant
+                        try {
+                            const current: Book[] = raw ? JSON.parse(raw) : [];
+                            const updated = sanitizeBooksArrayForLocalStorage([...current, remoteBook]);
+                            localStorage.setItem(STORAGE_KEYS.BOOKS, JSON.stringify(updated));
+                        } catch (e) {
+                            console.warn('Failed to persist remote book locally', e);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Remote fetch failed', e);
+                } finally {
+                    if (!cancelled) setLoading(false);
+                }
+            } else {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
     }, [id]);
 
     const handleBookUpdate = (updatedBook: Book) => {

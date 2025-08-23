@@ -2,19 +2,22 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAIGeneration } from "../hooks/useAIGeneration";
 import { useBookActions } from "../hooks/useBookActions";
 import { useExpandableFields } from "../hooks/useExpandableFields";
 import { AIMessage, aiService, TokenEstimate } from "../lib/ai-service";
 import { BookEditorProps, TabType } from "../types/book";
 // Replaced AISettingsModal with consolidated SettingsModal
-import { SettingsModal } from "./SettingsModal";
+import type { Session } from '@supabase/supabase-js';
+import { supabaseClient } from "../lib/supabase-client";
+import { isSupabaseEnabled } from "../lib/supabase-enabled";
 import ContextWindow from "./ContextWindow";
 import { ChaptersSection } from "./sections/ChaptersSection";
 import { CharactersSection } from "./sections/CharactersSection";
 import { LocationsSection } from "./sections/LocationsSection";
 import { NotesSection } from "./sections/NotesSection";
+import { SettingsModal } from "./SettingsModal";
 import { Button } from "./ui/Button";
 import { DocumentViewer } from "./ui/DocumentViewer";
 import { MessageSquareIcon, SettingsIcon } from "./ui/Icons";
@@ -172,6 +175,30 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         updatedUpload.pages[currentDocumentPage - 1] = value;
         updateBook({ uploads: [updatedUpload] });
     };
+
+    // Debounced cloud sync of sections
+    const syncTimer = useRef<any>(null);
+    const sectionsSignature = JSON.stringify(local.sections);
+    useEffect(() => {
+        if (!isSupabaseEnabled || !supabaseClient) return;
+        supabaseClient.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
+            if (!data.session) return;
+            if (syncTimer.current) clearTimeout(syncTimer.current);
+            syncTimer.current = setTimeout(async () => {
+                try {
+                    await fetch(`/api/books/${local.id}/sections`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sections: local.sections, window: local.window })
+                    });
+                } catch (e) {
+                    console.warn('Cloud sync failed', e);
+                }
+            }, 1500);
+        });
+        return () => { if (syncTimer.current) clearTimeout(syncTimer.current); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sectionsSignature, local.window.start, local.window.end]);
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 p-4">

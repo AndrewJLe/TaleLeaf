@@ -49,6 +49,9 @@ export interface Book {
     uploads: BookUpload[];
     pages?: number;
     cover?: string | null; // Base64 data URL or external URL
+    // Remote PDF sync metadata (optional)
+    pdfPath?: string; // storage path for the original PDF if uploaded to cloud
+    pdfPageCount?: number; // authoritative page count from stored PDF
     createdAt: Date;
     updatedAt: Date;
 }

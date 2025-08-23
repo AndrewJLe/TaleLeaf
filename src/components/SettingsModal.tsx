@@ -1,7 +1,12 @@
 "use client";
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AI_PROVIDERS, AIProvider, aiService, AISettings, TokenBudget } from '../lib/ai-service';
+import { pdfStorage } from '../lib/pdf-storage';
+import { supabaseClient } from '../lib/supabase-client';
+import { isSupabaseEnabled } from '../lib/supabase-enabled';
+import { uploadPDF } from '../lib/supabase-storage';
+import { uploadCover } from '../lib/upload-cover';
 import { Book } from '../types/book';
 
 interface Props {
@@ -158,8 +163,45 @@ export function SettingsModal({ isOpen, onClose, book, onUpdate, onReupload, isE
         </div>
 
         {/* Hidden Inputs */}
-        <input ref={fileInputRef} type="file" accept=".txt,.pdf,text/plain,application/pdf" className="hidden" onChange={async (e) => { const f = e.currentTarget.files?.[0]; if (f) await onReupload(f); e.currentTarget.value=''; }} />
-        <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.currentTarget.files?.[0]; if (!f) return; const reader = new FileReader(); reader.onload = () => onUpdate({ cover: reader.result as string }); reader.readAsDataURL(f); e.currentTarget.value=''; }} />
+        <input ref={fileInputRef} type="file" accept=".txt,.pdf,text/plain,application/pdf" className="hidden" onChange={async (e) => {
+          const f = e.currentTarget.files?.[0];
+          if (f) {
+            await onReupload(f);
+            // If it's a PDF and supabase enabled, upload to storage and update metadata
+            if (isSupabaseEnabled && supabaseClient && (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))) {
+              try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                if (session) {
+                  // Store locally (onReupload already did) but get blob again for upload
+                  const uploadId = crypto.randomUUID();
+                  await pdfStorage.storePDF(uploadId, f.name, f);
+                  const path = await uploadPDF(session.user.id, book.id, f, f.name);
+                  onUpdate({ pdfPath: path });
+                  await fetch(`/api/books/${book.id}/meta`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pdfPath: path }) });
+                }
+              } catch (err) {
+                console.warn('PDF reupload cloud sync failed', err);
+              }
+            }
+          }
+          e.currentTarget.value = '';
+        }} />
+        <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={async (e) => {
+          const f = e.currentTarget.files?.[0]; if (!f) return; try {
+            if (isSupabaseEnabled) {
+              const url = await uploadCover(f, book.id);
+              if (url) {
+                onUpdate({ cover: url });
+                await fetch(`/api/books/${book.id}/meta`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ coverUrl: url }) });
+                return;
+              }
+            }
+            // Fallback to base64 local if Supabase disabled / failure
+            const reader = new FileReader();
+            reader.onload = () => onUpdate({ cover: reader.result as string });
+            reader.readAsDataURL(f);
+          } finally { e.currentTarget.value = ''; }
+        }} />
 
         {/* Footer */}
         <div className="p-5 border-t border-emerald-200 bg-emerald-50 flex items-center justify-between">

@@ -34,3 +34,21 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Optional Cloud Persistence (Phase 1)
+
+To enable multi-device sync using Supabase (kept minimal):
+
+1. Create a Supabase project (free tier).
+2. Copy the SQL from `supabase-schema.sql` into the Supabase SQL editor and run it.
+3. Create `.env.local`:
+```
+NEXT_PUBLIC_SUPABASE_URL=your_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+# Optional (future secure server mutations):
+# SUPABASE_SERVICE_ROLE_KEY=service_role_key
+```
+4. Restart dev server.
+5. Sign in via magic link (UI to be added) and import local books.
+
+If env vars are absent the app silently falls back to local-only mode.

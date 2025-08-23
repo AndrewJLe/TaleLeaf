@@ -18,7 +18,7 @@ export function sanitizeBookForLocalStorage(book: any) {
         return {
           id: upload.id,
           filename: upload.filename,
-            type: upload.type,
+          type: upload.type,
           pageCount: upload.pageCount,
           uploadedAt: upload.uploadedAt,
           indexedDBKey: upload.indexedDBKey,
