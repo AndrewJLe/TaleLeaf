@@ -1,23 +1,34 @@
 import { useCallback } from 'react';
 import { aiService } from '../lib/ai-service';
 import { AIGenerationState, Book, Chapter, Character, Location } from '../types/book';
+import { useBookPersistence } from './useBookPersistence';
 
 export const useBookActions = (
     book: Book,
     onUpdate: (book: Book) => void,
     setGenerationLoading: (type: keyof AIGenerationState, loading: boolean) => void
 ) => {
+    const { saveSections } = useBookPersistence();
 
     const updateBook = useCallback((updates: Partial<Book>) => {
         const updatedBook = { ...book, ...updates, updatedAt: new Date() };
         onUpdate(updatedBook);
     }, [book, onUpdate]);
 
-    const updateSections = useCallback((sectionUpdates: Partial<Book['sections']>) => {
+    const updateSections = useCallback(async (sectionUpdates: Partial<Book['sections']>) => {
+        const newSections = { ...book.sections, ...sectionUpdates };
         updateBook({
-            sections: { ...book.sections, ...sectionUpdates }
+            sections: newSections
         });
-    }, [book.sections, updateBook]);
+        
+        // Auto-save to database
+        try {
+            await saveSections(book.id, newSections, book.window);
+        } catch (error) {
+            console.error('Failed to save sections:', error);
+            // TODO: Show toast notification for save errors
+        }
+    }, [book.sections, book.id, book.window, updateBook, saveSections]);
 
     // Character actions
     const addCharacter = useCallback((character: Character) => {
@@ -85,8 +96,8 @@ export const useBookActions = (
     }, [book.sections.locations, updateSections]);
 
     // Notes actions
-    const updateNotes = useCallback((notes: string) => {
-        updateSections({ notes });
+    const updateNotes = useCallback(async (notes: string) => {
+        await updateSections({ notes });
     }, [updateSections]);
 
     // AI Generation actions

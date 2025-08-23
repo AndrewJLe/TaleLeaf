@@ -5,9 +5,12 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAIGeneration } from "../hooks/useAIGeneration";
 import { useBookActions } from "../hooks/useBookActions";
+import { useBookNotes } from "../hooks/useBookNotes";
+import { useBookPersistence } from "../hooks/useBookPersistence";
 import { useExpandableFields } from "../hooks/useExpandableFields";
 import { AIMessage, aiService, TokenEstimate } from "../lib/ai-service";
 import { BookEditorProps, TabType } from "../types/book";
+import { featureFlags } from "../constants/featureFlags";
 // Replaced AISettingsModal with consolidated SettingsModal
 import type { Session } from '@supabase/supabase-js';
 import { supabaseClient } from "../lib/supabase-client";
@@ -17,6 +20,7 @@ import { ChaptersSection } from "./sections/ChaptersSection";
 import { CharactersSection } from "./sections/CharactersSection";
 import { LocationsSection } from "./sections/LocationsSection";
 import { NotesSection } from "./sections/NotesSection";
+import { NotesList } from "./sections/NotesList";
 import { SettingsModal } from "./SettingsModal";
 import { Button } from "./ui/Button";
 import { DocumentViewer } from "./ui/DocumentViewer";
@@ -28,6 +32,7 @@ import { TabNavigation } from "./ui/TabNavigation";
 // Token budget display intentionally omitted from header for minimal UI
 import { TokenConfirmDialog } from "./ui/TokenConfirmDialog";
 import { Tooltip } from "./ui/Tooltip";
+import { FeatureFlagDebug } from "./FeatureFlagDebug";
 
 export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     const [local, setLocal] = useState(book);
@@ -65,6 +70,26 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         setGenerationLoading
     } = useAIGeneration();
 
+    // TODO N1: Multi-note system integration
+    const {
+        notes: bookNotes,
+        isLoading: notesLoading,
+        error: notesError,
+        addNote,
+        updateNote,
+        deleteNote,
+        reorderNotes
+    } = useBookNotes(local.id, featureFlags.notesV2);
+
+    // Database persistence
+    const {
+        isLoading: isPersisting,
+        error: persistError,
+        saveBook,
+        deleteBook,
+        lastSaved
+    } = useBookPersistence();
+
     // Book actions hook
     const {
         addCharacter,
@@ -88,6 +113,31 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         setLocal(updatedBook);
         onUpdate(updatedBook);
     }, setGenerationLoading);
+
+    // Handle book deletion
+    const handleDeleteBook = async () => {
+        try {
+            await deleteBook(local.id);
+            // Redirect to library after successful deletion
+            window.location.href = '/profile';
+        } catch (error) {
+            console.error('Failed to delete book:', error);
+            // Error is already set in useBookPersistence
+        }
+    };
+
+    // Auto-save book metadata when title or window changes
+    useEffect(() => {
+        const saveTimer = setTimeout(async () => {
+            try {
+                await saveBook(local);
+            } catch (error) {
+                console.error('Auto-save failed:', error);
+            }
+        }, 2000); // 2 second debounce
+
+        return () => clearTimeout(saveTimer);
+    }, [local.title, local.window.start, local.window.end, local.cover, saveBook]);
 
     // Context window management - use pageCount from upload for clean data flow
     const pageCount = (() => {
@@ -257,6 +307,24 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                     <SettingsIcon size={20} />
                                 </Button>
                             </Tooltip>
+                            
+                            {/* Database Status Indicator */}
+                            {isPersisting && (
+                                <div className="text-xs text-gray-500 flex items-center gap-1">
+                                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                                    Saving...
+                                </div>
+                            )}
+                            {lastSaved && !isPersisting && (
+                                <div className="text-xs text-gray-400">
+                                    Saved {lastSaved.toLocaleTimeString()}
+                                </div>
+                            )}
+                            {persistError && (
+                                <div className="text-xs text-red-500" title={persistError}>
+                                    Save failed
+                                </div>
+                            )}
                         </div>
                     </div>
                     {/* Removed inline reupload/cover inputs: now in Settings modal */}
@@ -397,16 +465,36 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                     )}
 
                                     {tab === 'notes' && (
-                                        <NotesSection
-                                            notes={local.sections.notes}
-                                            onUpdateNotes={updateNotes}
-                                            onGenerateNotes={() => confirmAIAction(
-                                                'generate notes',
-                                                'Create insightful reading notes for the provided text',
-                                                generateNotes
+                                        <>
+                                            {featureFlags.notesV2 ? (
+                                                <NotesList
+                                                    notes={bookNotes}
+                                                    currentWindowEnd={local.window.end}
+                                                    onAddNote={async (noteData) => {
+                                                        await addNote({
+                                                            ...noteData,
+                                                            bookId: local.id
+                                                        });
+                                                    }}
+                                                    onUpdateNote={updateNote}
+                                                    onDeleteNote={deleteNote}
+                                                    onReorderNotes={reorderNotes}
+                                                    isLoading={notesLoading}
+                                                    error={notesError}
+                                                />
+                                            ) : (
+                                                <NotesSection
+                                                    notes={local.sections.notes}
+                                                    onUpdateNotes={updateNotes}
+                                                    onGenerateNotes={() => confirmAIAction(
+                                                        'generate notes',
+                                                        'Create insightful reading notes for the provided text',
+                                                        generateNotes
+                                                    )}
+                                                    isGenerating={aiGenerationState.notes}
+                                                />
                                             )}
-                                            isGenerating={aiGenerationState.notes}
-                                        />
+                                        </>
                                     )}
                                 </div>
                             </div>
@@ -465,6 +553,8 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                 isEditingPageText={isEditingPageText}
                 toggleEditingPageText={() => setIsEditingPageText(p => !p)}
                 currentPage={currentDocumentPage}
+                onDeleteBook={handleDeleteBook}
+                isDeletingBook={isPersisting}
             />
 
             {/* Rate Limits Modal */}
@@ -484,6 +574,9 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                 estimate={tokenConfirm.estimate!}
                 action={tokenConfirm.action}
             />
+
+            {/* Feature Flag Debug (dev only) */}
+            <FeatureFlagDebug />
         </div>
     );
 }

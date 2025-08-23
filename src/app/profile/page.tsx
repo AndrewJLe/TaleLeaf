@@ -3,8 +3,9 @@
 import type { Session } from '@supabase/supabase-js';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { BookList, UploadForm } from '../../components';
+import { BookList, UploadForm, ConfirmDeleteDialog } from '../../components';
 import { AuthPanel } from '../../components/AuthPanel';
+import { useBookPersistence } from '../../hooks/useBookPersistence';
 import { sanitizeBooksArrayForLocalStorage } from '../../lib/storage';
 import { supabaseClient } from '../../lib/supabase-client';
 import { isSupabaseEnabled } from '../../lib/supabase-enabled';
@@ -18,6 +19,12 @@ export default function ProfilePage() {
     const [session, setSession] = useState<Session | null>(null);
     const [sessionChecked, setSessionChecked] = useState(false);
     const [remoteError, setRemoteError] = useState<string | null>(null);
+    
+    // Delete confirmation state
+    const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string } | null>(null);
+    
+    // Use persistence hook for database operations
+    const { deleteBook: deleteBookFromDB, isLoading: isDeletingFromDB } = useBookPersistence();
 
     useEffect(() => {
         const raw = localStorage.getItem('taleleaf:books');
@@ -74,6 +81,46 @@ export default function ProfilePage() {
             }
         }
     }, [books]);
+
+    // Handle book deletion with confirmation
+    const handleDeleteBook = async (id: string, title: string) => {
+        setDeleteConfirm({ id, title });
+    };
+
+    const confirmDeleteBook = async () => {
+        if (!deleteConfirm) return;
+
+        try {
+            // Remove from local storage first
+            setBooks((prevBooks) => prevBooks.filter((b) => b.id !== deleteConfirm.id));
+            
+            // If Supabase is enabled and user is authenticated, delete from remote
+            if (isSupabaseEnabled && session) {
+                try {
+                    await deleteBookFromDB(deleteConfirm.id);
+                    
+                    // Refresh remote books list
+                    const { data } = await supabaseClient
+                        .from('books')
+                        .select('id,title,cover_url,window_start,window_end,created_at,updated_at')
+                        .order('updated_at', { ascending: false });
+                    setRemoteBooks(data || []);
+                } catch (dbError) {
+                    console.error('Failed to delete from database:', dbError);
+                    // Don't re-add to local storage since local deletion succeeded
+                    // User will see it's gone locally but may still appear in remote
+                }
+            }
+        } catch (error) {
+            console.error('Failed to delete book:', error);
+        } finally {
+            setDeleteConfirm(null);
+        }
+    };
+
+    const cancelDeleteBook = () => {
+        setDeleteConfirm(null);
+    };
 
     // Loading state while determining session
     if (isSupabaseEnabled && !sessionChecked) {
@@ -324,12 +371,21 @@ export default function ProfilePage() {
                             books={mergedBooks}
                             selectedId={null}
                             onSelect={() => { }}
-                            onDelete={(id: string) => setBooks((s) => s.filter((b) => b.id !== id))}
+                            onDelete={handleDeleteBook}
                             remoteIds={remoteIds}
                             unsyncedIds={unsyncedIds}
                         />
                     )}
                 </div>
+
+                {/* Delete Confirmation Dialog */}
+                <ConfirmDeleteDialog
+                    isOpen={!!deleteConfirm}
+                    bookTitle={deleteConfirm?.title || ''}
+                    onConfirm={confirmDeleteBook}
+                    onCancel={cancelDeleteBook}
+                    isDeleting={isDeletingFromDB}
+                />
             </div>
         </div>
     );

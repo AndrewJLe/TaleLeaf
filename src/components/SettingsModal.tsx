@@ -8,6 +8,7 @@ import { isSupabaseEnabled } from '../lib/supabase-enabled';
 import { uploadPDF } from '../lib/supabase-storage';
 import { uploadCover } from '../lib/upload-cover';
 import { Book } from '../types/book';
+import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 
 interface Props {
   isOpen: boolean;
@@ -18,16 +19,19 @@ interface Props {
   isEditingPageText: boolean;
   toggleEditingPageText: () => void;
   currentPage: number;
+  onDeleteBook?: () => void;
+  isDeletingBook?: boolean;
 }
 
 type Tab = 'ai' | 'book';
 
-export function SettingsModal({ isOpen, onClose, book, onUpdate, onReupload, isEditingPageText, toggleEditingPageText, currentPage }: Props) {
+export function SettingsModal({ isOpen, onClose, book, onUpdate, onReupload, isEditingPageText, toggleEditingPageText, currentPage, onDeleteBook, isDeletingBook = false }: Props) {
   const [tab, setTab] = useState<Tab>('ai');
   const [settings, setSettings] = useState<AISettings>({ provider: 'openai-gpt4o-mini', apiKeys: {} });
   const [tempApiKey, setTempApiKey] = useState('');
   const [selectedProvider, setSelectedProvider] = useState<AIProvider | null>(null);
   const [budget, setBudget] = useState<TokenBudget>(aiService.getTokenBudget());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const coverInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -57,6 +61,19 @@ export function SettingsModal({ isOpen, onClose, book, onUpdate, onReupload, isE
   const handleProviderSelect = (provider: AIProvider) => {
     setSelectedProvider(provider);
     setTempApiKey(settings.apiKeys[provider.id] || '');
+  };
+
+  const handleDeleteClick = () => {
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = () => {
+    setShowDeleteConfirm(false);
+    onDeleteBook?.();
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteConfirm(false);
   };
 
   if (!isOpen) return null;
@@ -158,6 +175,25 @@ export function SettingsModal({ isOpen, onClose, book, onUpdate, onReupload, isE
                 <p className="font-medium">Page Editing Note</p>
                 <p>When you edit page {currentPage}, the modified text will be used for AI context immediately but does not alter the original uploaded file.</p>
               </div>
+
+              {/* Delete Book Section */}
+              {onDeleteBook && (
+                <div className="pt-4 mt-4 border-t border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900">Delete Book</h4>
+                      <p className="text-xs text-gray-600">Remove this book permanently</p>
+                    </div>
+                    <button
+                      onClick={handleDeleteClick}
+                      disabled={isDeletingBook}
+                      className="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed bg-red-600 text-white hover:bg-red-700 focus:ring-red-500"
+                    >
+                      🗑️ Delete
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -218,6 +254,15 @@ export function SettingsModal({ isOpen, onClose, book, onUpdate, onReupload, isE
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDeleteDialog
+        isOpen={showDeleteConfirm}
+        bookTitle={book.title}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+        isDeleting={isDeletingBook}
+      />
     </div>
   );
 }

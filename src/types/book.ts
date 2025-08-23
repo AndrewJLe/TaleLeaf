@@ -13,6 +13,33 @@ export interface Location {
     notes: string;
 }
 
+// TODO N1: Multi-note normalized model
+export interface BookNote {
+    id: string;
+    bookId: string;
+    title?: string;
+    body: string;
+    tags: string[];
+    position: number;
+    spoilerProtected: boolean;
+    minVisiblePage?: number;
+    createdAt: string;
+    updatedAt: string;
+}
+
+// TODO H1: Hierarchical locations model
+export interface BookLocation {
+    id: string;
+    bookId: string;
+    parentId?: string | null;
+    name: string;
+    notes: string;
+    position: number;
+    depth: number;
+    createdAt: string;
+    updatedAt: string;
+}
+
 export interface BookSections {
     characters: Character[];
     chapters: Chapter[];

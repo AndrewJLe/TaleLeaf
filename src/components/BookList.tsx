@@ -13,7 +13,7 @@ interface BookListProps {
     books: any[];
     selectedId?: string | null;
     onSelect?: (id: string) => void;
-    onDelete: (id: string) => void;
+    onDelete: (id: string, title: string) => void;
     remoteIds?: Set<string>;
     unsyncedIds?: Set<string>;
 }
@@ -74,7 +74,7 @@ export default function BookList({ books, selectedId, onSelect, onDelete, remote
                             <div className="flex gap-2">
                                 <Link href={`/book/${book.id}`} className="flex-1 px-3 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors text-center">📖 Read</Link>
                                 <Link href={`/book/${book.id}?edit=1`} className="px-3 py-2 bg-emerald-100 text-emerald-700 text-sm font-medium rounded-lg hover:bg-emerald-200 transition-colors" title="Edit settings">⚙️</Link>
-                                <button onClick={() => onDelete(book.id)} className="px-3 py-2 bg-red-100 text-red-600 text-sm font-medium rounded-lg hover:bg-red-200 transition-colors" title="Delete book">🗑️</button>
+                                <button onClick={() => onDelete(book.id, book.title)} className="px-3 py-2 bg-red-100 text-red-600 text-sm font-medium rounded-lg hover:bg-red-200 transition-colors" title="Delete book">🗑️</button>
                             </div>
                         </div>
                     </div>
