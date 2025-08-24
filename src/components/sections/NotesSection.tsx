@@ -215,55 +215,32 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
                 {notes.map((note, index) => (
                     <div key={note.id} className="p-4 sm:p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
                         <div className="space-y-4">
-                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                                <div className="flex-1 flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center relative flex-shrink-0">
-                                        <NotebookIcon size={18} className="text-orange-600" />
-                                        {dirty[note.id] && (
-                                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white"></div>
-                                        )}
-                                    </div>
-                                    <input
-                                        type="text"
-                                        value={note.name}
-                                        onChange={(e) => onUpdateNote(index, { ...note, name: e.target.value })}
-                                        className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-orange-500 rounded-lg px-3 py-1 -mx-3 w-full sm:w-auto"
-                                        placeholder="Note title"
-                                    />
+                            {/* Title Row */}
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center relative flex-shrink-0">
+                                    <NotebookIcon size={18} className="text-orange-600" />
+                                    {dirty[note.id] && (
+                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white"></div>
+                                    )}
                                 </div>
+                                <input
+                                    type="text"
+                                    value={note.name}
+                                    onChange={(e) => onUpdateNote(index, { ...note, name: e.target.value })}
+                                    className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-orange-500 rounded-lg px-3 py-1 -mx-3 flex-1 min-w-0"
+                                    placeholder="Note title"
+                                />
+                            </div>
 
-                                <div className="flex items-center gap-2">
+                            {/* Actions Row - Responsive Layout */}
+                            <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                                {/* Primary Actions - Save and Status */}
+                                <div className="flex items-center gap-2 order-2 sm:order-1">
                                     <SaveStateIndicator
                                         isSaving={savingStates[note.id] || false}
                                         hasUnsavedChanges={dirty[note.id] || false}
                                         showSaved={showSavedStates[note.id] || false}
                                     />
-                                    <Tooltip
-                                        text="Move this note up in the order"
-                                        id={`note-up-${note.id}`}
-                                    >
-                                        <Button
-                                            onClick={() => onMoveNote(index, 'up')}
-                                            variant="ghost"
-                                            size="sm"
-                                            disabled={index === 0}
-                                        >
-                                            <ChevronUpIcon size={14} />
-                                        </Button>
-                                    </Tooltip>
-                                    <Tooltip
-                                        text="Move this note down in the order"
-                                        id={`note-down-${note.id}`}
-                                    >
-                                        <Button
-                                            onClick={() => onMoveNote(index, 'down')}
-                                            variant="ghost"
-                                            size="sm"
-                                            disabled={index === notes.length - 1}
-                                        >
-                                            <ChevronDownIcon size={14} />
-                                        </Button>
-                                    </Tooltip>
                                     <button
                                         onClick={() => handleSaveNote(note)}
                                         disabled={savingStates[note.id] || !dirty[note.id]}
@@ -276,8 +253,45 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
                                         title="Ctrl+Enter to save"
                                     >
                                         <SaveIcon size={14} />
-                                        {savingStates[note.id] ? 'Saving...' : 'Save'}
+                                        <span className="hidden sm:inline">
+                                            {savingStates[note.id] ? 'Saving...' : 'Save'}
+                                        </span>
                                     </button>
+                                </div>
+
+                                {/* Secondary Actions - Navigation and Tools */}
+                                <div className="flex items-center gap-2 order-1 sm:order-2">
+                                    <div className="flex items-center gap-1">
+                                        <Tooltip
+                                            text="Move this note up in the order"
+                                            id={`note-up-${note.id}`}
+                                        >
+                                            <Button
+                                                onClick={() => onMoveNote(index, 'up')}
+                                                variant="ghost"
+                                                size="sm"
+                                                disabled={index === 0}
+                                            >
+                                                <ChevronUpIcon size={14} />
+                                            </Button>
+                                        </Tooltip>
+                                        <Tooltip
+                                            text="Move this note down in the order"
+                                            id={`note-down-${note.id}`}
+                                        >
+                                            <Button
+                                                onClick={() => onMoveNote(index, 'down')}
+                                                variant="ghost"
+                                                size="sm"
+                                                disabled={index === notes.length - 1}
+                                            >
+                                                <ChevronDownIcon size={14} />
+                                            </Button>
+                                        </Tooltip>
+                                    </div>
+                                    
+                                    <div className="w-px h-6 bg-gray-200"></div>
+                                    
                                     <Tooltip
                                         text="Remove this note from your list"
                                         id={`delete-note-${note.id}`}
@@ -286,7 +300,6 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
                                             onClick={() => onDeleteNote(index)}
                                             variant="danger"
                                             size="sm"
-                                            className="self-start sm:self-auto"
                                         >
                                             <TrashIcon size={14} />
                                         </Button>

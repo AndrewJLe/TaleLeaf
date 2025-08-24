@@ -226,51 +226,29 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                                 <UsersIcon size={24} className="text-amber-600" />
                             </div>
                             <div className="flex-1 space-y-4 min-w-0">
-                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="text"
-                                            value={character.name}
-                                            onChange={(e) => onUpdateCharacter(index, { ...character, name: e.target.value })}
-                                            className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-lg px-3 py-1 -mx-3 w-full sm:w-auto"
-                                            placeholder="Character name"
-                                        />
-                                        {dirty[character.id] && (
-                                            <div className="w-2 h-2 bg-amber-500 rounded-full" title="Unsaved changes" />
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-2">
+                                {/* Title Row */}
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        value={character.name}
+                                        onChange={(e) => onUpdateCharacter(index, { ...character, name: e.target.value })}
+                                        className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-lg px-3 py-1 -mx-3 flex-1 min-w-0"
+                                        placeholder="Character name"
+                                    />
+                                    {dirty[character.id] && (
+                                        <div className="w-2 h-2 bg-amber-500 rounded-full flex-shrink-0" title="Unsaved changes" />
+                                    )}
+                                </div>
+
+                                {/* Actions Row - Responsive Layout */}
+                                <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                                    {/* Primary Actions - Save and Status */}
+                                    <div className="flex items-center gap-2 order-2 sm:order-1">
                                         <SaveStateIndicator
                                             isSaving={savingStates[character.id]}
                                             showSaved={showSavedStates[character.id]}
                                             hasUnsavedChanges={dirty[character.id]}
                                         />
-                                        <Tooltip
-                                            text="Move this character up in the order"
-                                            id={`character-up-${character.id}`}
-                                        >
-                                            <Button
-                                                onClick={() => onMoveCharacter(index, 'up')}
-                                                variant="ghost"
-                                                size="sm"
-                                                disabled={index === 0}
-                                            >
-                                                <ChevronUpIcon size={14} />
-                                            </Button>
-                                        </Tooltip>
-                                        <Tooltip
-                                            text="Move this character down in the order"
-                                            id={`character-down-${character.id}`}
-                                        >
-                                            <Button
-                                                onClick={() => onMoveCharacter(index, 'down')}
-                                                variant="ghost"
-                                                size="sm"
-                                                disabled={index === characters.length - 1}
-                                            >
-                                                <ChevronDownIcon size={14} />
-                                            </Button>
-                                        </Tooltip>
                                         <Tooltip
                                             text="Save character notes"
                                             id={`save-character-${character.id}`}
@@ -283,9 +261,46 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                                                 className={`${dirty[character.id] ? 'bg-emerald-600 text-white hover:bg-emerald-700' : ''}`}
                                             >
                                                 <SaveIcon size={14} />
-                                                {savingStates[character.id] ? 'Saving...' : 'Save'}
+                                                <span className="hidden sm:inline">
+                                                    {savingStates[character.id] ? 'Saving...' : 'Save'}
+                                                </span>
                                             </Button>
                                         </Tooltip>
+                                    </div>
+
+                                    {/* Secondary Actions - Navigation and Tools */}
+                                    <div className="flex items-center gap-2 order-1 sm:order-2">
+                                        <div className="flex items-center gap-1">
+                                            <Tooltip
+                                                text="Move this character up in the order"
+                                                id={`character-up-${character.id}`}
+                                            >
+                                                <Button
+                                                    onClick={() => onMoveCharacter(index, 'up')}
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    disabled={index === 0}
+                                                >
+                                                    <ChevronUpIcon size={14} />
+                                                </Button>
+                                            </Tooltip>
+                                            <Tooltip
+                                                text="Move this character down in the order"
+                                                id={`character-down-${character.id}`}
+                                            >
+                                                <Button
+                                                    onClick={() => onMoveCharacter(index, 'down')}
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    disabled={index === characters.length - 1}
+                                                >
+                                                    <ChevronDownIcon size={14} />
+                                                </Button>
+                                            </Tooltip>
+                                        </div>
+                                        
+                                        <div className="w-px h-6 bg-gray-200"></div>
+                                        
                                         <Tooltip
                                             text="Remove this character from your list"
                                             id={`delete-character-${character.id}`}
@@ -294,7 +309,6 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                                                 onClick={() => onDeleteCharacter(index)}
                                                 variant="danger"
                                                 size="sm"
-                                                className="self-start sm:self-auto"
                                             >
                                                 <TrashIcon size={14} />
                                             </Button>

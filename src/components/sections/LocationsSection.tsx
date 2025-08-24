@@ -221,46 +221,29 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
                                 )}
                             </div>
                             <div className="flex-1 space-y-4">
-                                <div className="flex justify-between items-center">
+                                {/* Title Row */}
+                                <div className="flex items-center gap-2">
                                     <input
                                         type="text"
                                         value={location.name}
                                         onChange={(e) => onUpdateLocation(index, { ...location, name: e.target.value })}
-                                        className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-purple-500 rounded-lg px-3 py-1 -mx-3"
+                                        className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-purple-500 rounded-lg px-3 py-1 -mx-3 flex-1 min-w-0"
                                         placeholder="Location name"
                                     />
-                                    <div className="flex items-center gap-2">
+                                    {dirty[location.id] && (
+                                        <div className="w-2 h-2 bg-amber-500 rounded-full flex-shrink-0" title="Unsaved changes" />
+                                    )}
+                                </div>
+
+                                {/* Actions Row - Responsive Layout */}
+                                <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                                    {/* Primary Actions - Save and Status */}
+                                    <div className="flex items-center gap-2 order-2 sm:order-1">
                                         <SaveStateIndicator
                                             isSaving={savingStates[location.id] || false}
                                             hasUnsavedChanges={dirty[location.id] || false}
                                             showSaved={showSavedStates[location.id] || false}
                                         />
-                                        <Tooltip
-                                            text="Move this location up in the order"
-                                            id={`location-up-${location.id}`}
-                                        >
-                                            <Button
-                                                onClick={() => onMoveLocation(index, 'up')}
-                                                variant="ghost"
-                                                size="sm"
-                                                disabled={index === 0}
-                                            >
-                                                <ChevronUpIcon size={14} />
-                                            </Button>
-                                        </Tooltip>
-                                        <Tooltip
-                                            text="Move this location down in the order"
-                                            id={`location-down-${location.id}`}
-                                        >
-                                            <Button
-                                                onClick={() => onMoveLocation(index, 'down')}
-                                                variant="ghost"
-                                                size="sm"
-                                                disabled={index === locations.length - 1}
-                                            >
-                                                <ChevronDownIcon size={14} />
-                                            </Button>
-                                        </Tooltip>
                                         <button
                                             onClick={() => handleSaveLocation(location)}
                                             disabled={savingStates[location.id] || !dirty[location.id]}
@@ -273,8 +256,45 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
                                             title="Ctrl+Enter to save"
                                         >
                                             <SaveIcon size={14} />
-                                            {savingStates[location.id] ? 'Saving...' : 'Save'}
+                                            <span className="hidden sm:inline">
+                                                {savingStates[location.id] ? 'Saving...' : 'Save'}
+                                            </span>
                                         </button>
+                                    </div>
+
+                                    {/* Secondary Actions - Navigation and Tools */}
+                                    <div className="flex items-center gap-2 order-1 sm:order-2">
+                                        <div className="flex items-center gap-1">
+                                            <Tooltip
+                                                text="Move this location up in the order"
+                                                id={`location-up-${location.id}`}
+                                            >
+                                                <Button
+                                                    onClick={() => onMoveLocation(index, 'up')}
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    disabled={index === 0}
+                                                >
+                                                    <ChevronUpIcon size={14} />
+                                                </Button>
+                                            </Tooltip>
+                                            <Tooltip
+                                                text="Move this location down in the order"
+                                                id={`location-down-${location.id}`}
+                                            >
+                                                <Button
+                                                    onClick={() => onMoveLocation(index, 'down')}
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    disabled={index === locations.length - 1}
+                                                >
+                                                    <ChevronDownIcon size={14} />
+                                                </Button>
+                                            </Tooltip>
+                                        </div>
+                                        
+                                        <div className="w-px h-6 bg-gray-200"></div>
+                                        
                                         <Tooltip
                                             text="Remove this location from your list"
                                             id={`delete-location-${location.id}`}
