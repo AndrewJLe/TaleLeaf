@@ -221,117 +221,114 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
             <div className="space-y-4">
                 {characters.map((character, index) => (
                     <div key={character.id} className="p-4 sm:p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                            <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
-                                <UsersIcon size={24} className="text-amber-600" />
+                        <div className="space-y-4">
+                            {/* Title Row */}
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center relative flex-shrink-0">
+                                    <UsersIcon size={18} className="text-amber-600" />
+                                    {dirty[character.id] && (
+                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white"></div>
+                                    )}
+                                </div>
+                                <input
+                                    type="text"
+                                    value={character.name}
+                                    onChange={(e) => onUpdateCharacter(index, { ...character, name: e.target.value })}
+                                    className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-lg px-3 py-1 -mx-3 flex-1 min-w-0"
+                                    placeholder="Character name"
+                                />
                             </div>
-                            <div className="flex-1 space-y-4 min-w-0">
-                                {/* Title Row */}
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="text"
-                                        value={character.name}
-                                        onChange={(e) => onUpdateCharacter(index, { ...character, name: e.target.value })}
-                                        className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-lg px-3 py-1 -mx-3 flex-1 min-w-0"
-                                        placeholder="Character name"
+
+                            {/* Actions Row - Responsive Layout */}
+                            <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                                {/* Primary Actions - Save and Status */}
+                                <div className="flex items-center gap-2 order-2 sm:order-1">
+                                    <SaveStateIndicator
+                                        isSaving={savingStates[character.id]}
+                                        showSaved={showSavedStates[character.id]}
+                                        hasUnsavedChanges={dirty[character.id]}
                                     />
-                                    {dirty[character.id] && (
-                                        <div className="w-2 h-2 bg-amber-500 rounded-full flex-shrink-0" title="Unsaved changes" />
-                                    )}
+                                    <button
+                                        onClick={() => handleSaveCharacter(character)}
+                                        disabled={savingStates[character.id] || !dirty[character.id]}
+                                        className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 ${savingStates[character.id]
+                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                            : dirty[character.id]
+                                                ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
+                                                : 'bg-emerald-100 text-emerald-700 cursor-default'
+                                            }`}
+                                        title="Ctrl+Enter to save"
+                                    >
+                                        <SaveIcon size={14} />
+                                        <span className="hidden sm:inline">
+                                            {savingStates[character.id] ? 'Saving...' : 'Save'}
+                                        </span>
+                                    </button>
                                 </div>
 
-                                {/* Actions Row - Responsive Layout */}
-                                <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-                                    {/* Primary Actions - Save and Status */}
-                                    <div className="flex items-center gap-2 order-2 sm:order-1">
-                                        <SaveStateIndicator
-                                            isSaving={savingStates[character.id]}
-                                            showSaved={showSavedStates[character.id]}
-                                            hasUnsavedChanges={dirty[character.id]}
-                                        />
+                                {/* Secondary Actions - Navigation and Tools */}
+                                <div className="flex items-center gap-2 order-1 sm:order-2">
+                                    <div className="flex items-center gap-1">
                                         <Tooltip
-                                            text="Save character notes"
-                                            id={`save-character-${character.id}`}
+                                            text="Move this character up in the order"
+                                            id={`character-up-${character.id}`}
                                         >
                                             <Button
-                                                onClick={() => handleSaveCharacter(character)}
-                                                disabled={savingStates[character.id] || !dirty[character.id]}
-                                                variant="secondary"
+                                                onClick={() => onMoveCharacter(index, 'up')}
+                                                variant="ghost"
                                                 size="sm"
-                                                className={`${dirty[character.id] ? 'bg-emerald-600 text-white hover:bg-emerald-700' : ''}`}
+                                                disabled={index === 0}
                                             >
-                                                <SaveIcon size={14} />
-                                                <span className="hidden sm:inline">
-                                                    {savingStates[character.id] ? 'Saving...' : 'Save'}
-                                                </span>
+                                                <ChevronUpIcon size={14} />
+                                            </Button>
+                                        </Tooltip>
+                                        <Tooltip
+                                            text="Move this character down in the order"
+                                            id={`character-down-${character.id}`}
+                                        >
+                                            <Button
+                                                onClick={() => onMoveCharacter(index, 'down')}
+                                                variant="ghost"
+                                                size="sm"
+                                                disabled={index === characters.length - 1}
+                                            >
+                                                <ChevronDownIcon size={14} />
                                             </Button>
                                         </Tooltip>
                                     </div>
 
-                                    {/* Secondary Actions - Navigation and Tools */}
-                                    <div className="flex items-center gap-2 order-1 sm:order-2">
-                                        <div className="flex items-center gap-1">
-                                            <Tooltip
-                                                text="Move this character up in the order"
-                                                id={`character-up-${character.id}`}
-                                            >
-                                                <Button
-                                                    onClick={() => onMoveCharacter(index, 'up')}
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    disabled={index === 0}
-                                                >
-                                                    <ChevronUpIcon size={14} />
-                                                </Button>
-                                            </Tooltip>
-                                            <Tooltip
-                                                text="Move this character down in the order"
-                                                id={`character-down-${character.id}`}
-                                            >
-                                                <Button
-                                                    onClick={() => onMoveCharacter(index, 'down')}
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    disabled={index === characters.length - 1}
-                                                >
-                                                    <ChevronDownIcon size={14} />
-                                                </Button>
-                                            </Tooltip>
-                                        </div>
+                                    <div className="w-px h-6 bg-gray-200"></div>
 
-                                        <div className="w-px h-6 bg-gray-200"></div>
-
-                                        <Tooltip
-                                            text="Remove this character from your list"
-                                            id={`delete-character-${character.id}`}
+                                    <Tooltip
+                                        text="Remove this character from your list"
+                                        id={`delete-character-${character.id}`}
+                                    >
+                                        <Button
+                                            onClick={() => onDeleteCharacter(index)}
+                                            variant="danger"
+                                            size="sm"
                                         >
-                                            <Button
-                                                onClick={() => onDeleteCharacter(index)}
-                                                variant="danger"
-                                                size="sm"
-                                            >
-                                                <TrashIcon size={14} />
-                                            </Button>
-                                        </Tooltip>
-                                    </div>
+                                            <TrashIcon size={14} />
+                                        </Button>
+                                    </Tooltip>
                                 </div>
+                            </div>
 
-                                <div className="space-y-2">
-                                    <label className="text-sm text-gray-600 font-medium">Character Description</label>
-                                    <ResizableTextArea
-                                        value={getDisplayValue(character)}
-                                        onChange={(notes) => handleCharacterNotesChange(character, notes)}
-                                        onSave={() => handleSaveCharacter(character)}
-                                        placeholder="Describe this character, their personality, role, background..."
-                                        minRows={3}
-                                        maxRows={15}
-                                    />
-                                    {dirty[character.id] && (
-                                        <p className="text-xs text-gray-500">
-                                            Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> or click Save to save your changes
-                                        </p>
-                                    )}
-                                </div>
+                            <div className="space-y-2">
+                                <label className="text-sm text-gray-600 font-medium">Character Description</label>
+                                <ResizableTextArea
+                                    value={getDisplayValue(character)}
+                                    onChange={(notes) => handleCharacterNotesChange(character, notes)}
+                                    onSave={() => handleSaveCharacter(character)}
+                                    placeholder="Describe this character, their personality, role, background..."
+                                    minRows={3}
+                                    maxRows={15}
+                                />
+                                {dirty[character.id] && (
+                                    <p className="text-xs text-gray-500">
+                                        Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> or click Save to save your changes
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </div>

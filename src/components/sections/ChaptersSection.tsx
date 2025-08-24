@@ -199,138 +199,133 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
 
             <div className="space-y-4">
                 {chapters.map((chapter, index) => (
-                    <div key={chapter.id} className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                            <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center relative flex-shrink-0">
-                                <BookOpenIcon size={24} className="text-green-600" />
-                                {dirty[chapter.id] && (
-                                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white"></div>
-                                )}
-                            </div>
-                            <div className="flex-1 space-y-4 min-w-0">
-                                {/* Title Row with Chapter-level Actions */}
-                                <div className="flex items-center gap-2 justify-between">
-                                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                                        <input
-                                            type="text"
-                                            value={chapter.name}
-                                            onChange={(e) => onUpdateChapter(index, { ...chapter, name: e.target.value })}
-                                            className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-green-500 rounded-lg px-3 py-1 -mx-3 flex-1 min-w-0"
-                                            placeholder="Chapter title"
-                                        />
+                    <div key={chapter.id} className="p-4 sm:p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
+                        <div className="space-y-4">
+                            {/* Title Row with Chapter-level Actions */}
+                            <div className="flex items-center gap-3 justify-between">
+                                <div className="flex items-center gap-3 flex-1">
+                                    <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center relative flex-shrink-0">
+                                        <BookOpenIcon size={18} className="text-green-600" />
                                         {dirty[chapter.id] && (
-                                            <div className="w-2 h-2 bg-amber-500 rounded-full flex-shrink-0" title="Unsaved changes" />
+                                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white"></div>
                                         )}
                                     </div>
-
-                                    {/* Chapter-level Actions */}
-                                    <Tooltip
-                                        text="Generate an AI-powered summary of this chapter from your selected text"
-                                        id={`chapter-summary-${chapter.id}`}
-                                    >
-                                        <Button
-                                            onClick={() => onGenerateSummary(index)}
-                                            variant="ghost"
-                                            size="sm"
-                                            isLoading={isGenerating}
-                                        >
-                                            <SparklesIcon size={14} />
-                                            <span className="hidden sm:inline">Summary</span>
-                                        </Button>
-                                    </Tooltip>
+                                    <input
+                                        type="text"
+                                        value={chapter.name}
+                                        onChange={(e) => onUpdateChapter(index, { ...chapter, name: e.target.value })}
+                                        className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-green-500 rounded-lg px-3 py-1 -mx-3 flex-1 min-w-0"
+                                        placeholder="Chapter title"
+                                    />
                                 </div>
 
-                                {/* Actions Row - Responsive Layout */}
-                                <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-                                    {/* Primary Actions - Save and Status */}
-                                    <div className="flex items-center gap-2 order-2 sm:order-1">
-                                        <SaveStateIndicator
-                                            isSaving={savingStates[chapter.id] || false}
-                                            hasUnsavedChanges={dirty[chapter.id] || false}
-                                            showSaved={showSavedStates[chapter.id] || false}
-                                        />
-                                        <button
-                                            onClick={() => handleSaveChapter(chapter)}
-                                            disabled={savingStates[chapter.id] || !dirty[chapter.id]}
-                                            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 ${savingStates[chapter.id]
-                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                : dirty[chapter.id]
-                                                    ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
-                                                    : 'bg-emerald-100 text-emerald-700 cursor-default'
-                                                }`}
-                                            title="Ctrl+Enter to save"
-                                        >
-                                            <SaveIcon size={14} />
-                                            <span className="hidden sm:inline">
-                                                {savingStates[chapter.id] ? 'Saving...' : 'Save'}
-                                            </span>
-                                        </button>
-                                    </div>
+                                {/* Chapter-level Actions */}
+                                <Tooltip
+                                    text="Generate an AI-powered summary of this chapter from your selected text"
+                                    id={`chapter-summary-${chapter.id}`}
+                                >
+                                    <Button
+                                        onClick={() => onGenerateSummary(index)}
+                                        variant="ghost"
+                                        size="sm"
+                                        isLoading={isGenerating}
+                                    >
+                                        <SparklesIcon size={14} />
+                                        <span className="hidden sm:inline">Summary</span>
+                                    </Button>
+                                </Tooltip>
+                            </div>
 
-                                    {/* Secondary Actions - Navigation and Delete Only */}
-                                    <div className="flex items-center gap-2 order-1 sm:order-2">
-                                        <div className="flex items-center gap-1">
-                                            <Tooltip
-                                                text="Move this chapter up in the order"
-                                                id={`chapter-up-${chapter.id}`}
-                                            >
-                                                <Button
-                                                    onClick={() => onMoveChapter(index, 'up')}
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    disabled={index === 0}
-                                                >
-                                                    <ChevronUpIcon size={14} />
-                                                </Button>
-                                            </Tooltip>
-                                            <Tooltip
-                                                text="Move this chapter down in the order"
-                                                id={`chapter-down-${chapter.id}`}
-                                            >
-                                                <Button
-                                                    onClick={() => onMoveChapter(index, 'down')}
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    disabled={index === chapters.length - 1}
-                                                >
-                                                    <ChevronDownIcon size={14} />
-                                                </Button>
-                                            </Tooltip>
-                                        </div>
+                            {/* Actions Row - Responsive Layout */}
+                            <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                                {/* Primary Actions - Save and Status */}
+                                <div className="flex items-center gap-2 order-2 sm:order-1">
+                                    <SaveStateIndicator
+                                        isSaving={savingStates[chapter.id] || false}
+                                        hasUnsavedChanges={dirty[chapter.id] || false}
+                                        showSaved={showSavedStates[chapter.id] || false}
+                                    />
+                                    <button
+                                        onClick={() => handleSaveChapter(chapter)}
+                                        disabled={savingStates[chapter.id] || !dirty[chapter.id]}
+                                        className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 ${savingStates[chapter.id]
+                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                            : dirty[chapter.id]
+                                                ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
+                                                : 'bg-emerald-100 text-emerald-700 cursor-default'
+                                            }`}
+                                        title="Ctrl+Enter to save"
+                                    >
+                                        <SaveIcon size={14} />
+                                        <span className="hidden sm:inline">
+                                            {savingStates[chapter.id] ? 'Saving...' : 'Save'}
+                                        </span>
+                                    </button>
+                                </div>
 
-                                        <div className="w-px h-6 bg-gray-200"></div>
-
+                                {/* Secondary Actions - Navigation and Delete Only */}
+                                <div className="flex items-center gap-2 order-1 sm:order-2">
+                                    <div className="flex items-center gap-1">
                                         <Tooltip
-                                            text="Remove this chapter from your list"
-                                            id={`delete-chapter-${chapter.id}`}
+                                            text="Move this chapter up in the order"
+                                            id={`chapter-up-${chapter.id}`}
                                         >
                                             <Button
-                                                onClick={() => onDeleteChapter(index)}
-                                                variant="danger"
+                                                onClick={() => onMoveChapter(index, 'up')}
+                                                variant="ghost"
                                                 size="sm"
+                                                disabled={index === 0}
                                             >
-                                                <TrashIcon size={14} />
+                                                <ChevronUpIcon size={14} />
+                                            </Button>
+                                        </Tooltip>
+                                        <Tooltip
+                                            text="Move this chapter down in the order"
+                                            id={`chapter-down-${chapter.id}`}
+                                        >
+                                            <Button
+                                                onClick={() => onMoveChapter(index, 'down')}
+                                                variant="ghost"
+                                                size="sm"
+                                                disabled={index === chapters.length - 1}
+                                            >
+                                                <ChevronDownIcon size={14} />
                                             </Button>
                                         </Tooltip>
                                     </div>
-                                </div>
 
-                                <div className="space-y-3">
-                                    <label className="text-sm text-gray-600 font-medium">Chapter Notes</label>
-                                    <ResizableTextArea
-                                        value={getDisplayValue(chapter)}
-                                        onChange={(notes) => handleChapterNotesChange(chapter, notes)}
-                                        onSave={() => handleSaveChapter(chapter)}
-                                        placeholder="Chapter summary and notes..."
-                                        minRows={3}
-                                        maxRows={15}
-                                    />
-                                    {dirty[chapter.id] && (
-                                        <p className="text-xs text-gray-500">
-                                            Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> or click Save to save your changes
-                                        </p>
-                                    )}
+                                    <div className="w-px h-6 bg-gray-200"></div>
+
+                                    <Tooltip
+                                        text="Remove this chapter from your list"
+                                        id={`delete-chapter-${chapter.id}`}
+                                    >
+                                        <Button
+                                            onClick={() => onDeleteChapter(index)}
+                                            variant="danger"
+                                            size="sm"
+                                        >
+                                            <TrashIcon size={14} />
+                                        </Button>
+                                    </Tooltip>
                                 </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <label className="text-sm text-gray-600 font-medium">Chapter Notes</label>
+                                <ResizableTextArea
+                                    value={getDisplayValue(chapter)}
+                                    onChange={(notes) => handleChapterNotesChange(chapter, notes)}
+                                    onSave={() => handleSaveChapter(chapter)}
+                                    placeholder="Chapter summary and notes..."
+                                    minRows={3}
+                                    maxRows={15}
+                                />
+                                {dirty[chapter.id] && (
+                                    <p className="text-xs text-gray-500">
+                                        Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> or click Save to save your changes
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </div>

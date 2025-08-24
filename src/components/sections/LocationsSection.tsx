@@ -212,120 +212,115 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
 
             <div className="space-y-4">
                 {locations.map((location, index) => (
-                    <div key={location.id} className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
-                        <div className="flex items-start gap-4">
-                            <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center relative">
-                                <MapPinIcon size={24} className="text-purple-600" />
-                                {dirty[location.id] && (
-                                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white"></div>
-                                )}
-                            </div>
-                            <div className="flex-1 space-y-4">
-                                {/* Title Row */}
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="text"
-                                        value={location.name}
-                                        onChange={(e) => onUpdateLocation(index, { ...location, name: e.target.value })}
-                                        className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-purple-500 rounded-lg px-3 py-1 -mx-3 flex-1 min-w-0"
-                                        placeholder="Location name"
-                                    />
+                    <div key={location.id} className="p-4 sm:p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
+                        <div className="space-y-4">
+                            {/* Title Row */}
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center relative flex-shrink-0">
+                                    <MapPinIcon size={18} className="text-purple-600" />
                                     {dirty[location.id] && (
-                                        <div className="w-2 h-2 bg-amber-500 rounded-full flex-shrink-0" title="Unsaved changes" />
+                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white"></div>
                                     )}
                                 </div>
+                                <input
+                                    type="text"
+                                    value={location.name}
+                                    onChange={(e) => onUpdateLocation(index, { ...location, name: e.target.value })}
+                                    className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-purple-500 rounded-lg px-3 py-1 -mx-3 flex-1 min-w-0"
+                                    placeholder="Location name"
+                                />
+                            </div>
 
-                                {/* Actions Row - Responsive Layout */}
-                                <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-                                    {/* Primary Actions - Save and Status */}
-                                    <div className="flex items-center gap-2 order-2 sm:order-1">
-                                        <SaveStateIndicator
-                                            isSaving={savingStates[location.id] || false}
-                                            hasUnsavedChanges={dirty[location.id] || false}
-                                            showSaved={showSavedStates[location.id] || false}
-                                        />
-                                        <button
-                                            onClick={() => handleSaveLocation(location)}
-                                            disabled={savingStates[location.id] || !dirty[location.id]}
-                                            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 ${savingStates[location.id]
-                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                : dirty[location.id]
-                                                    ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
-                                                    : 'bg-emerald-100 text-emerald-700 cursor-default'
-                                                }`}
-                                            title="Ctrl+Enter to save"
-                                        >
-                                            <SaveIcon size={14} />
-                                            <span className="hidden sm:inline">
-                                                {savingStates[location.id] ? 'Saving...' : 'Save'}
-                                            </span>
-                                        </button>
-                                    </div>
+                            {/* Actions Row - Responsive Layout */}
+                            <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                                {/* Primary Actions - Save and Status */}
+                                <div className="flex items-center gap-2 order-2 sm:order-1">
+                                    <SaveStateIndicator
+                                        isSaving={savingStates[location.id] || false}
+                                        hasUnsavedChanges={dirty[location.id] || false}
+                                        showSaved={showSavedStates[location.id] || false}
+                                    />
+                                    <button
+                                        onClick={() => handleSaveLocation(location)}
+                                        disabled={savingStates[location.id] || !dirty[location.id]}
+                                        className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 ${savingStates[location.id]
+                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                            : dirty[location.id]
+                                                ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
+                                                : 'bg-emerald-100 text-emerald-700 cursor-default'
+                                            }`}
+                                        title="Ctrl+Enter to save"
+                                    >
+                                        <SaveIcon size={14} />
+                                        <span className="hidden sm:inline">
+                                            {savingStates[location.id] ? 'Saving...' : 'Save'}
+                                        </span>
+                                    </button>
+                                </div>
 
-                                    {/* Secondary Actions - Navigation and Tools */}
-                                    <div className="flex items-center gap-2 order-1 sm:order-2">
-                                        <div className="flex items-center gap-1">
-                                            <Tooltip
-                                                text="Move this location up in the order"
-                                                id={`location-up-${location.id}`}
-                                            >
-                                                <Button
-                                                    onClick={() => onMoveLocation(index, 'up')}
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    disabled={index === 0}
-                                                >
-                                                    <ChevronUpIcon size={14} />
-                                                </Button>
-                                            </Tooltip>
-                                            <Tooltip
-                                                text="Move this location down in the order"
-                                                id={`location-down-${location.id}`}
-                                            >
-                                                <Button
-                                                    onClick={() => onMoveLocation(index, 'down')}
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    disabled={index === locations.length - 1}
-                                                >
-                                                    <ChevronDownIcon size={14} />
-                                                </Button>
-                                            </Tooltip>
-                                        </div>
-
-                                        <div className="w-px h-6 bg-gray-200"></div>
-
+                                {/* Secondary Actions - Navigation and Tools */}
+                                <div className="flex items-center gap-2 order-1 sm:order-2">
+                                    <div className="flex items-center gap-1">
                                         <Tooltip
-                                            text="Remove this location from your list"
-                                            id={`delete-location-${location.id}`}
+                                            text="Move this location up in the order"
+                                            id={`location-up-${location.id}`}
                                         >
                                             <Button
-                                                onClick={() => onDeleteLocation(index)}
-                                                variant="danger"
+                                                onClick={() => onMoveLocation(index, 'up')}
+                                                variant="ghost"
                                                 size="sm"
+                                                disabled={index === 0}
                                             >
-                                                <TrashIcon size={14} />
+                                                <ChevronUpIcon size={14} />
+                                            </Button>
+                                        </Tooltip>
+                                        <Tooltip
+                                            text="Move this location down in the order"
+                                            id={`location-down-${location.id}`}
+                                        >
+                                            <Button
+                                                onClick={() => onMoveLocation(index, 'down')}
+                                                variant="ghost"
+                                                size="sm"
+                                                disabled={index === locations.length - 1}
+                                            >
+                                                <ChevronDownIcon size={14} />
                                             </Button>
                                         </Tooltip>
                                     </div>
-                                </div>
 
-                                <div className="space-y-3">
-                                    <label className="text-sm text-gray-600 font-medium">Location Description</label>
-                                    <ResizableTextArea
-                                        value={getDisplayValue(location)}
-                                        onChange={(notes) => handleLocationNotesChange(location, notes)}
-                                        onSave={() => handleSaveLocation(location)}
-                                        placeholder="Describe this location, its significance, atmosphere..."
-                                        minRows={3}
-                                        maxRows={15}
-                                    />
-                                    {dirty[location.id] && (
-                                        <p className="text-xs text-gray-500">
-                                            Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> or click Save to save your changes
-                                        </p>
-                                    )}
+                                    <div className="w-px h-6 bg-gray-200"></div>
+
+                                    <Tooltip
+                                        text="Remove this location from your list"
+                                        id={`delete-location-${location.id}`}
+                                    >
+                                        <Button
+                                            onClick={() => onDeleteLocation(index)}
+                                            variant="danger"
+                                            size="sm"
+                                        >
+                                            <TrashIcon size={14} />
+                                        </Button>
+                                    </Tooltip>
                                 </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <label className="text-sm text-gray-600 font-medium">Location Description</label>
+                                <ResizableTextArea
+                                    value={getDisplayValue(location)}
+                                    onChange={(notes) => handleLocationNotesChange(location, notes)}
+                                    onSave={() => handleSaveLocation(location)}
+                                    placeholder="Describe this location, its significance, atmosphere..."
+                                    minRows={3}
+                                    maxRows={15}
+                                />
+                                {dirty[location.id] && (
+                                    <p className="text-xs text-gray-500">
+                                        Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> or click Save to save your changes
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </div>
