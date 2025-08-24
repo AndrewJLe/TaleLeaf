@@ -33,7 +33,7 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
     saveError = null
 }) => {
     const [newChapterName, setNewChapterName] = useState('');
-    
+
     // ID-based draft tracking
     const [drafts, setDrafts] = useState<Record<string, string>>({});
     const [dirty, setDirty] = useState<Record<string, boolean>>({});
@@ -79,9 +79,9 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
     // Track changes for individual chapters
     const handleChapterNotesChange = (chapter: Chapter, notes: string) => {
         setDrafts(prev => ({ ...prev, [chapter.id]: notes }));
-        setDirty(prev => ({ 
-            ...prev, 
-            [chapter.id]: notes !== chapter.notes 
+        setDirty(prev => ({
+            ...prev,
+            [chapter.id]: notes !== chapter.notes
         }));
     };
 
@@ -94,13 +94,13 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
 
         setSavingStates(prev => ({ ...prev, [chapter.id]: true }));
         setShowSavedStates(prev => ({ ...prev, [chapter.id]: false }));
-        
+
         try {
             // Ensure minimum 800ms for better UX perception
             await Promise.all([
-                onUpdateChapter(chapterInfo.index, { 
-                    ...chapter, 
-                    notes: drafts[chapter.id] 
+                onUpdateChapter(chapterInfo.index, {
+                    ...chapter,
+                    notes: drafts[chapter.id]
                 }),
                 new Promise(resolve => setTimeout(resolve, 800))
             ]);

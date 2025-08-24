@@ -33,7 +33,7 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
     saveError = null
 }) => {
     const [newCharacterName, setNewCharacterName] = useState('');
-    
+
     // ID-based draft tracking
     const [drafts, setDrafts] = useState<Record<string, string>>({});
     const [dirty, setDirty] = useState<Record<string, boolean>>({});
@@ -79,9 +79,9 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
     // Track changes for individual characters
     const handleCharacterNotesChange = (character: Character, notes: string) => {
         setDrafts(prev => ({ ...prev, [character.id]: notes }));
-        setDirty(prev => ({ 
-            ...prev, 
-            [character.id]: notes !== character.notes 
+        setDirty(prev => ({
+            ...prev,
+            [character.id]: notes !== character.notes
         }));
     };
 
@@ -94,13 +94,13 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
 
         setSavingStates(prev => ({ ...prev, [character.id]: true }));
         setShowSavedStates(prev => ({ ...prev, [character.id]: false }));
-        
+
         try {
             // Ensure minimum 800ms for better UX perception
             await Promise.all([
-                onUpdateCharacter(characterInfo.index, { 
-                    ...character, 
-                    notes: drafts[character.id] 
+                onUpdateCharacter(characterInfo.index, {
+                    ...character,
+                    notes: drafts[character.id]
                 }),
                 new Promise(resolve => setTimeout(resolve, 800))
             ]);
@@ -150,49 +150,49 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
     return (
         <div className="space-y-6">
             <div className="p-4 sm:p-6 bg-gray-50 rounded-xl border border-gray-200">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-amber-100 rounded-lg flex-shrink-0">
-                                <UsersIcon size={20} className="text-amber-600" />
-                            </div>
-                            <div>
-                                <h4 className="text-lg font-semibold text-gray-900">Characters ({characters.length})</h4>
-                                <SaveStatus
-                                    isSaving={isSaving}
-                                    lastSaved={lastSaved}
-                                    error={saveError}
-                                    className="mt-0.5"
-                                />
-                            </div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-amber-100 rounded-lg flex-shrink-0">
+                            <UsersIcon size={20} className="text-amber-600" />
                         </div>
-                        <div className="flex items-center gap-3">
-                            {dirtyCount > 0 && (
-                                <Button
-                                    onClick={handleSaveAll}
-                                    variant="secondary"
-                                    size="sm"
-                                    className="bg-emerald-600 text-white hover:bg-emerald-700"
-                                >
-                                    <SaveIcon size={14} />
-                                    Save All ({dirtyCount})
-                                </Button>
-                            )}
-                            <Tooltip
-                                text="Use AI to automatically find and extract characters mentioned in your selected text"
-                                id="characters-ai-generate"
+                        <div>
+                            <h4 className="text-lg font-semibold text-gray-900">Characters ({characters.length})</h4>
+                            <SaveStatus
+                                isSaving={isSaving}
+                                lastSaved={lastSaved}
+                                error={saveError}
+                                className="mt-0.5"
+                            />
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {dirtyCount > 0 && (
+                            <Button
+                                onClick={handleSaveAll}
+                                variant="secondary"
+                                size="sm"
+                                className="bg-emerald-600 text-white hover:bg-emerald-700"
                             >
-                                <Button
-                                    onClick={onGenerateCharacters}
-                                    isLoading={isGenerating}
-                                    variant="primary"
-                                    className="w-full sm:w-auto"
-                                >
-                                    <SparklesIcon size={16} />
-                                    {isGenerating ? 'Generating...' : 'AI Generate'}
-                                </Button>
-                            </Tooltip>
-                        </div>
-                    </div>                {/* Manual Add Character */}
+                                <SaveIcon size={14} />
+                                Save All ({dirtyCount})
+                            </Button>
+                        )}
+                        <Tooltip
+                            text="Use AI to automatically find and extract characters mentioned in your selected text"
+                            id="characters-ai-generate"
+                        >
+                            <Button
+                                onClick={onGenerateCharacters}
+                                isLoading={isGenerating}
+                                variant="primary"
+                                className="w-full sm:w-auto"
+                            >
+                                <SparklesIcon size={16} />
+                                {isGenerating ? 'Generating...' : 'AI Generate'}
+                            </Button>
+                        </Tooltip>
+                    </div>
+                </div>                {/* Manual Add Character */}
                 <div className="flex flex-col sm:flex-row gap-3">
                     <input
                         type="text"

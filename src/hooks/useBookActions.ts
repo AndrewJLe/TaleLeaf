@@ -32,9 +32,9 @@ export const useBookActions = (
 
     // Character actions
     const addCharacter = useCallback((character: Omit<Character, 'id'>) => {
-        const newCharacter: Character = { 
-            ...character, 
-            id: crypto.randomUUID() 
+        const newCharacter: Character = {
+            ...character,
+            id: crypto.randomUUID()
         };
         const characters = [...book.sections.characters, newCharacter];
         updateSections({ characters });
@@ -65,9 +65,9 @@ export const useBookActions = (
 
     // Chapter actions
     const addChapter = useCallback((chapter: Omit<Chapter, 'id'>) => {
-        const newChapter: Chapter = { 
-            ...chapter, 
-            id: crypto.randomUUID() 
+        const newChapter: Chapter = {
+            ...chapter,
+            id: crypto.randomUUID()
         };
         const chapters = [...book.sections.chapters, newChapter];
         updateSections({ chapters });
@@ -98,9 +98,9 @@ export const useBookActions = (
 
     // Location actions
     const addLocation = useCallback((location: Omit<Location, 'id'>) => {
-        const newLocation: Location = { 
-            ...location, 
-            id: crypto.randomUUID() 
+        const newLocation: Location = {
+            ...location,
+            id: crypto.randomUUID()
         };
         const locations = [...book.sections.locations, newLocation];
         updateSections({ locations });
@@ -131,9 +131,9 @@ export const useBookActions = (
 
     // Notes actions
     const addNote = useCallback((note: Omit<Note, 'id'>) => {
-        const newNote: Note = { 
-            ...note, 
-            id: crypto.randomUUID() 
+        const newNote: Note = {
+            ...note,
+            id: crypto.randomUUID()
         };
         const notes = [...book.sections.notes, newNote];
         updateSections({ notes });

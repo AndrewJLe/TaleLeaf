@@ -33,7 +33,7 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
     saveError = null
 }) => {
     const [newNoteName, setNewNoteName] = useState('');
-    
+
     // ID-based draft tracking
     const [drafts, setDrafts] = useState<Record<string, string>>({});
     const [dirty, setDirty] = useState<Record<string, boolean>>({});
@@ -79,9 +79,9 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
     // Track changes for individual notes
     const handleNoteContentChange = (note: Note, content: string) => {
         setDrafts(prev => ({ ...prev, [note.id]: content }));
-        setDirty(prev => ({ 
-            ...prev, 
-            [note.id]: content !== note.notes 
+        setDirty(prev => ({
+            ...prev,
+            [note.id]: content !== note.notes
         }));
     };
 
@@ -94,13 +94,13 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
 
         setSavingStates(prev => ({ ...prev, [note.id]: true }));
         setShowSavedStates(prev => ({ ...prev, [note.id]: false }));
-        
+
         try {
             // Ensure minimum 800ms for better UX perception
             await Promise.all([
-                onUpdateNote(noteInfo.index, { 
-                    ...note, 
-                    notes: drafts[note.id] 
+                onUpdateNote(noteInfo.index, {
+                    ...note,
+                    notes: drafts[note.id]
                 }),
                 new Promise(resolve => setTimeout(resolve, 800))
             ]);

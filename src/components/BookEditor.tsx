@@ -48,17 +48,17 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
             ...char,
             id: char.id || crypto.randomUUID()
         }));
-        
+
         migratedBook.sections.chapters = migratedBook.sections.chapters.map(chapter => ({
             ...chapter,
             id: chapter.id || crypto.randomUUID()
         }));
-        
+
         migratedBook.sections.locations = migratedBook.sections.locations.map(location => ({
             ...location,
             id: location.id || crypto.randomUUID()
         }));
-        
+
         migratedBook.sections.notes = migratedBook.sections.notes.map(note => ({
             ...note,
             id: note.id || crypto.randomUUID()

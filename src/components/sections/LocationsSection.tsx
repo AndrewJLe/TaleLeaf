@@ -33,7 +33,7 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
     saveError = null
 }) => {
     const [newLocationName, setNewLocationName] = useState('');
-    
+
     // ID-based draft tracking
     const [drafts, setDrafts] = useState<Record<string, string>>({});
     const [dirty, setDirty] = useState<Record<string, boolean>>({});
@@ -79,9 +79,9 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
     // Track changes for individual locations
     const handleLocationNotesChange = (location: Location, notes: string) => {
         setDrafts(prev => ({ ...prev, [location.id]: notes }));
-        setDirty(prev => ({ 
-            ...prev, 
-            [location.id]: notes !== location.notes 
+        setDirty(prev => ({
+            ...prev,
+            [location.id]: notes !== location.notes
         }));
     };
 
@@ -94,13 +94,13 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
 
         setSavingStates(prev => ({ ...prev, [location.id]: true }));
         setShowSavedStates(prev => ({ ...prev, [location.id]: false }));
-        
+
         try {
             // Ensure minimum 800ms for better UX perception
             await Promise.all([
-                onUpdateLocation(locationInfo.index, { 
-                    ...location, 
-                    notes: drafts[location.id] 
+                onUpdateLocation(locationInfo.index, {
+                    ...location,
+                    notes: drafts[location.id]
                 }),
                 new Promise(resolve => setTimeout(resolve, 800))
             ]);
