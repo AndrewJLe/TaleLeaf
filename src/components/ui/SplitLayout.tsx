@@ -72,37 +72,38 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
     return (
         <div
             ref={containerRef}
-            className={`bg-gray-50 ${className}`}
+            className={`bg-gray-50 relative ${className}`}
             style={{
                 display: 'grid',
                 gridTemplateColumns: isLeftCollapsed
                     ? '0px 1fr'
                     : isRightCollapsed
                         ? '1fr 0px'
-                        : `${leftWidth}% 4px ${100 - leftWidth}%`,
+                        : `minmax(300px, ${leftWidth}%) 4px minmax(300px, ${100 - leftWidth}%)`,
                 height: 'calc(100vh - 140px)', // Full viewport height minus header
                 minHeight: '600px', // Ensure minimum usable height
+                overflow: 'hidden', // Prevent overall scroll
             }}
         >
             {/* Left Panel */}
             <div
-                className={`flex flex-col bg-white transition-all duration-300 ease-in-out ${isLeftCollapsed ? 'overflow-hidden' : 'overflow-visible'
+                className={`flex flex-col bg-white transition-all duration-300 ease-in-out min-w-0 ${isLeftCollapsed ? 'overflow-hidden' : 'overflow-hidden'
                     }`}
             >
                 {/* Left Panel Header */}
-                <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white">
-                    <h2 className="text-lg font-semibold text-gray-900">Book Editor</h2>
-                    <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between p-2 sm:p-4 border-b border-gray-200 bg-white flex-shrink-0">
+                    <h2 className="text-sm sm:text-lg font-semibold text-gray-900 truncate">Book Editor</h2>
+                    <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                         <button
                             onClick={toggleRightPanel}
-                            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                            className="p-1 sm:p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                             title={isRightCollapsed ? "Show document viewer" : "Hide document viewer"}
                         >
                             {isRightCollapsed ? <PanelRightIcon size={16} /> : <MaximizeIcon size={16} />}
                         </button>
                         <button
                             onClick={toggleLeftPanel}
-                            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                            className="p-1 sm:p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                             title="Minimize editor"
                         >
                             <PanelLeftIcon size={16} />
@@ -111,7 +112,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
                 </div>
 
                 {/* Left Panel Content */}
-                <div className={`flex-1 overflow-hidden ${isLeftCollapsed ? 'hidden' : 'block'}`}>
+                <div className={`flex-1 overflow-y-auto overflow-x-hidden ${isLeftCollapsed ? 'hidden' : 'block'}`}>
                     {leftPanel}
                 </div>
             </div>
@@ -130,23 +131,23 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
 
             {/* Right Panel */}
             <div
-                className={`flex flex-col bg-gray-50 transition-all duration-300 ease-in-out ${isRightCollapsed ? 'overflow-hidden' : 'overflow-visible'
+                className={`flex flex-col bg-gray-50 transition-all duration-300 ease-in-out min-w-0 ${isRightCollapsed ? 'overflow-hidden' : 'overflow-hidden'
                     }`}
             >
                 {/* Right Panel Header */}
-                <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white">
-                    <h2 className="text-lg font-semibold text-gray-900">Document Viewer</h2>
-                    <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between p-2 sm:p-4 border-b border-gray-200 bg-white flex-shrink-0">
+                    <h2 className="text-sm sm:text-lg font-semibold text-gray-900 truncate">Document Viewer</h2>
+                    <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                         <button
                             onClick={toggleLeftPanel}
-                            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                            className="p-1 sm:p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                             title={isLeftCollapsed ? "Show editor" : "Hide editor"}
                         >
                             {isLeftCollapsed ? <PanelLeftIcon size={16} /> : <MaximizeIcon size={16} />}
                         </button>
                         <button
                             onClick={toggleRightPanel}
-                            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                            className="p-1 sm:p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                             title="Minimize viewer"
                         >
                             <PanelRightIcon size={16} />
@@ -155,7 +156,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
                 </div>
 
                 {/* Right Panel Content */}
-                <div className={`flex-1 overflow-hidden ${isRightCollapsed ? 'hidden' : 'block'}`}>
+                <div className={`flex-1 overflow-y-auto overflow-x-hidden ${isRightCollapsed ? 'hidden' : 'block'}`}>
                     {rightPanel}
                 </div>
             </div>

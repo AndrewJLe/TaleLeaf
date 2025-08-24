@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Location } from '../../types/book';
 import { Button } from '../ui/Button';
-import { Tooltip } from '../ui/Tooltip';
+import { MapPinIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
-import { MapPinIcon, SparklesIcon, PlusIcon, TrashIcon } from '../ui/Icons';
+import { SaveStateIndicator } from '../ui/SaveStateIndicator';
+import { Tooltip } from '../ui/Tooltip';
 
 interface LocationsSectionProps {
     locations: Location[];
@@ -23,6 +24,56 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
     isGenerating
 }) => {
     const [newLocationName, setNewLocationName] = useState('');
+    const [localLocations, setLocalLocations] = useState<Location[]>(locations);
+    const [savingStates, setSavingStates] = useState<{ [key: number]: boolean }>({});
+    const [unsavedChanges, setUnsavedChanges] = useState<{ [key: number]: boolean }>({});
+    const [showSavedStates, setShowSavedStates] = useState<{ [key: number]: boolean }>({});
+
+    // Sync with prop changes
+    useEffect(() => {
+        setLocalLocations(locations);
+        setUnsavedChanges({});
+        setShowSavedStates({});
+    }, [locations]);
+
+    // Track changes for individual locations
+    const handleLocationNotesChange = (index: number, notes: string) => {
+        const updatedLocations = [...localLocations];
+        updatedLocations[index] = { ...updatedLocations[index], notes };
+        setLocalLocations(updatedLocations);
+
+        setUnsavedChanges(prev => ({
+            ...prev,
+            [index]: notes !== locations[index]?.notes
+        }));
+    };
+
+    // Save individual location
+    const handleSaveLocation = async (index: number) => {
+        if (!unsavedChanges[index]) return;
+
+        setSavingStates(prev => ({ ...prev, [index]: true }));
+        setShowSavedStates(prev => ({ ...prev, [index]: false }));
+        try {
+            // Ensure minimum 800ms for better UX perception
+            await Promise.all([
+                onUpdateLocation(index, localLocations[index]),
+                new Promise(resolve => setTimeout(resolve, 800))
+            ]);
+
+            setUnsavedChanges(prev => ({ ...prev, [index]: false }));
+            setShowSavedStates(prev => ({ ...prev, [index]: true }));
+
+            // Hide the "saved" indicator after 2 seconds
+            setTimeout(() => {
+                setShowSavedStates(prev => ({ ...prev, [index]: false }));
+            }, 2000);
+        } catch (error) {
+            console.error('Failed to save location:', error);
+        } finally {
+            setSavingStates(prev => ({ ...prev, [index]: false }));
+        }
+    };
 
     const handleAddLocation = () => {
         if (!newLocationName.trim()) return;
@@ -93,29 +144,56 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
                                         className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-purple-500 rounded-lg px-3 py-1 -mx-3"
                                         placeholder="Location name"
                                     />
-                                    <Tooltip
-                                        text="Remove this location from your list"
-                                        id={`delete-location-${index}`}
-                                    >
-                                        <Button
-                                            onClick={() => onDeleteLocation(index)}
-                                            variant="danger"
-                                            size="sm"
+                                    <div className="flex items-center gap-2">
+                                        <SaveStateIndicator
+                                            isSaving={savingStates[index] || false}
+                                            hasUnsavedChanges={unsavedChanges[index] || false}
+                                            showSaved={showSavedStates[index] || false}
+                                        />
+                                        <button
+                                            onClick={() => handleSaveLocation(index)}
+                                            disabled={savingStates[index] || !unsavedChanges[index]}
+                                            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 ${savingStates[index]
+                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                    : unsavedChanges[index]
+                                                        ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
+                                                        : 'bg-emerald-100 text-emerald-700 cursor-default'
+                                                }`}
+                                            title="Ctrl+Enter to save"
                                         >
-                                            <TrashIcon size={14} />
-                                        </Button>
-                                    </Tooltip>
+                                            <SaveIcon size={14} />
+                                            {savingStates[index] ? 'Saving...' : 'Save'}
+                                        </button>
+                                        <Tooltip
+                                            text="Remove this location from your list"
+                                            id={`delete-location-${index}`}
+                                        >
+                                            <Button
+                                                onClick={() => onDeleteLocation(index)}
+                                                variant="danger"
+                                                size="sm"
+                                            >
+                                                <TrashIcon size={14} />
+                                            </Button>
+                                        </Tooltip>
+                                    </div>
                                 </div>
 
-                                <div className="space-y-2">
+                                <div className="space-y-3">
                                     <label className="text-sm text-gray-600 font-medium">Location Description</label>
                                     <ResizableTextArea
-                                        value={location.notes}
-                                        onChange={(notes) => onUpdateLocation(index, { ...location, notes })}
+                                        value={localLocations[index]?.notes || ''}
+                                        onChange={(notes) => handleLocationNotesChange(index, notes)}
+                                        onSave={() => handleSaveLocation(index)}
                                         placeholder="Describe this location, its significance, atmosphere..."
                                         minRows={3}
                                         maxRows={15}
                                     />
+                                    {unsavedChanges[index] && (
+                                        <p className="text-xs text-gray-500">
+                                            Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> or click Save to save your changes
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         </div>

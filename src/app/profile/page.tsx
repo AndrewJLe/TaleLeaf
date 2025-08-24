@@ -3,9 +3,9 @@
 import type { Session } from '@supabase/supabase-js';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { BookList, UploadForm, ConfirmDeleteDialog } from '../../components';
+import { BookList, ConfirmDeleteDialog, UploadForm } from '../../components';
 import { AuthPanel } from '../../components/AuthPanel';
-import { useBookPersistence } from '../../hooks/useBookPersistence';
+import { useBookPersistence } from '../../hooks/useBookPersistenceNew';
 import { sanitizeBooksArrayForLocalStorage } from '../../lib/storage';
 import { supabaseClient } from '../../lib/supabase-client';
 import { isSupabaseEnabled } from '../../lib/supabase-enabled';
@@ -19,10 +19,10 @@ export default function ProfilePage() {
     const [session, setSession] = useState<Session | null>(null);
     const [sessionChecked, setSessionChecked] = useState(false);
     const [remoteError, setRemoteError] = useState<string | null>(null);
-    
+
     // Delete confirmation state
     const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string } | null>(null);
-    
+
     // Use persistence hook for database operations
     const { deleteBook: deleteBookFromDB, isLoading: isDeletingFromDB } = useBookPersistence();
 
@@ -93,12 +93,12 @@ export default function ProfilePage() {
         try {
             // Remove from local storage first
             setBooks((prevBooks) => prevBooks.filter((b) => b.id !== deleteConfirm.id));
-            
+
             // If Supabase is enabled and user is authenticated, delete from remote
             if (isSupabaseEnabled && session) {
                 try {
                     await deleteBookFromDB(deleteConfirm.id);
-                    
+
                     // Refresh remote books list
                     const { data } = await supabaseClient
                         .from('books')

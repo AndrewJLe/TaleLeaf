@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Chapter } from '../../types/book';
 import { Button } from '../ui/Button';
-import { Tooltip } from '../ui/Tooltip';
+import { BookOpenIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
-import { BookOpenIcon, SparklesIcon, PlusIcon, TrashIcon, ChevronUpIcon, ChevronDownIcon } from '../ui/Icons';
+import { SaveStateIndicator } from '../ui/SaveStateIndicator';
+import { Tooltip } from '../ui/Tooltip';
 
 interface ChaptersSectionProps {
     chapters: Chapter[];
@@ -25,6 +26,56 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
     isGenerating
 }) => {
     const [newChapterName, setNewChapterName] = useState('');
+    const [localChapters, setLocalChapters] = useState<Chapter[]>(chapters);
+    const [savingStates, setSavingStates] = useState<{ [key: number]: boolean }>({});
+    const [unsavedChanges, setUnsavedChanges] = useState<{ [key: number]: boolean }>({});
+    const [showSavedStates, setShowSavedStates] = useState<{ [key: number]: boolean }>({});
+
+    // Sync with prop changes
+    useEffect(() => {
+        setLocalChapters(chapters);
+        setUnsavedChanges({});
+        setShowSavedStates({});
+    }, [chapters]);
+
+    // Track changes for individual chapters
+    const handleChapterNotesChange = (index: number, notes: string) => {
+        const updatedChapters = [...localChapters];
+        updatedChapters[index] = { ...updatedChapters[index], notes };
+        setLocalChapters(updatedChapters);
+
+        setUnsavedChanges(prev => ({
+            ...prev,
+            [index]: notes !== chapters[index]?.notes
+        }));
+    };
+
+    // Save individual chapter
+    const handleSaveChapter = async (index: number) => {
+        if (!unsavedChanges[index]) return;
+
+        setSavingStates(prev => ({ ...prev, [index]: true }));
+        setShowSavedStates(prev => ({ ...prev, [index]: false }));
+        try {
+            // Ensure minimum 800ms for better UX perception
+            await Promise.all([
+                onUpdateChapter(index, localChapters[index]),
+                new Promise(resolve => setTimeout(resolve, 800))
+            ]);
+
+            setUnsavedChanges(prev => ({ ...prev, [index]: false }));
+            setShowSavedStates(prev => ({ ...prev, [index]: true }));
+
+            // Hide the "saved" indicator after 2 seconds
+            setTimeout(() => {
+                setShowSavedStates(prev => ({ ...prev, [index]: false }));
+            }, 2000);
+        } catch (error) {
+            console.error('Failed to save chapter:', error);
+        } finally {
+            setSavingStates(prev => ({ ...prev, [index]: false }));
+        }
+    };
 
     const handleAddChapter = () => {
         if (!newChapterName.trim()) return;
@@ -123,6 +174,25 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
                                                 <ChevronDownIcon size={14} />
                                             </Button>
                                         </Tooltip>
+                                        <SaveStateIndicator
+                                            isSaving={savingStates[index] || false}
+                                            hasUnsavedChanges={unsavedChanges[index] || false}
+                                            showSaved={showSavedStates[index] || false}
+                                        />
+                                        <button
+                                            onClick={() => handleSaveChapter(index)}
+                                            disabled={savingStates[index] || !unsavedChanges[index]}
+                                            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 ${savingStates[index]
+                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                    : unsavedChanges[index]
+                                                        ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
+                                                        : 'bg-emerald-100 text-emerald-700 cursor-default'
+                                                }`}
+                                            title="Ctrl+Enter to save"
+                                        >
+                                            <SaveIcon size={14} />
+                                            {savingStates[index] ? 'Saving...' : 'Save'}
+                                        </button>
                                         <Tooltip
                                             text="Remove this chapter from your list"
                                             id={`delete-chapter-${index}`}
@@ -138,15 +208,21 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
                                     </div>
                                 </div>
 
-                                <div className="space-y-2">
+                                <div className="space-y-3">
                                     <label className="text-sm text-gray-600 font-medium">Chapter Notes</label>
                                     <ResizableTextArea
-                                        value={chapter.notes}
-                                        onChange={(notes) => onUpdateChapter(index, { ...chapter, notes })}
+                                        value={localChapters[index]?.notes || ''}
+                                        onChange={(notes) => handleChapterNotesChange(index, notes)}
+                                        onSave={() => handleSaveChapter(index)}
                                         placeholder="Chapter summary and notes..."
                                         minRows={3}
                                         maxRows={15}
                                     />
+                                    {unsavedChanges[index] && (
+                                        <p className="text-xs text-gray-500">
+                                            Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> or click Save to save your changes
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         </div>

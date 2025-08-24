@@ -1,8 +1,9 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface ResizableTextAreaProps {
     value: string;
     onChange: (value: string) => void;
+    onSave?: () => void;
     placeholder?: string;
     className?: string;
     minRows?: number;
@@ -12,6 +13,7 @@ interface ResizableTextAreaProps {
 export const ResizableTextArea: React.FC<ResizableTextAreaProps> = ({
     value,
     onChange,
+    onSave,
     placeholder,
     className = '',
     minRows = 3,
@@ -21,6 +23,14 @@ export const ResizableTextArea: React.FC<ResizableTextAreaProps> = ({
     const [isDragging, setIsDragging] = useState(false);
     const [startY, setStartY] = useState(0);
     const [startHeight, setStartHeight] = useState(0);
+
+    // Handle keyboard shortcuts
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && onSave) {
+            e.preventDefault();
+            onSave();
+        }
+    };
 
     // Auto-resize based on content
     useEffect(() => {
@@ -71,10 +81,12 @@ export const ResizableTextArea: React.FC<ResizableTextAreaProps> = ({
                 ref={textAreaRef}
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
+                onKeyDown={handleKeyDown}
                 placeholder={placeholder}
                 className={`w-full p-3 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all resize-none ${className}`}
                 style={{ minHeight: `${minRows * 24}px` }}
             />
+
             {/* Resize handle */}
             <div
                 className={`absolute bottom-0 right-0 w-4 h-4 cursor-nw-resize opacity-50 hover:opacity-100 transition-opacity ${isDragging ? 'opacity-100' : ''

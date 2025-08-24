@@ -11,11 +11,11 @@ interface FeatureFlags {
 // Parse query parameters for flag overrides (dev/testing)
 function parseQueryFlags(): Partial<FeatureFlags> {
   if (typeof window === 'undefined') return {};
-  
+
   const params = new URLSearchParams(window.location.search);
   const flagParam = params.get('ff');
   if (!flagParam) return {};
-  
+
   const flags: Partial<FeatureFlags> = {};
   flagParam.split(',').forEach(flag => {
     const [key, value] = flag.split(':');
@@ -23,7 +23,7 @@ function parseQueryFlags(): Partial<FeatureFlags> {
       flags[key as keyof FeatureFlags] = value !== 'off' && value !== 'false';
     }
   });
-  
+
   return flags;
 }
 
@@ -35,9 +35,9 @@ function getFeatureFlags(): FeatureFlags {
     aiSummaries: false,
     collabPreview: false
   };
-  
+
   if (typeof window === 'undefined') return defaults;
-  
+
   // Load from localStorage
   const stored: Partial<FeatureFlags> = {};
   Object.keys(defaults).forEach(key => {
@@ -46,23 +46,23 @@ function getFeatureFlags(): FeatureFlags {
       stored[key as keyof FeatureFlags] = true;
     }
   });
-  
+
   // Apply query param overrides
   const queryFlags = parseQueryFlags();
-  
+
   return { ...defaults, ...stored, ...queryFlags };
 }
 
 // Set feature flag (persists to localStorage)
 function setFeatureFlag(flag: keyof FeatureFlags, enabled: boolean) {
   if (typeof window === 'undefined') return;
-  
+
   if (enabled) {
     localStorage.setItem(`ff.${flag}`, '1');
   } else {
     localStorage.removeItem(`ff.${flag}`);
   }
-  
+
   // Reload to apply changes
   window.location.reload();
 }

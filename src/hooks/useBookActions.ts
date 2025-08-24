@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { aiService } from '../lib/ai-service';
-import { AIGenerationState, Book, Chapter, Character, Location } from '../types/book';
-import { useBookPersistence } from './useBookPersistence';
+import { AIGenerationState, Book, Chapter, Character, Location, Note } from '../types/book';
+import { useBookPersistence } from './useBookPersistenceNew';
 
 export const useBookActions = (
     book: Book,
@@ -20,7 +20,7 @@ export const useBookActions = (
         updateBook({
             sections: newSections
         });
-        
+
         // Auto-save to database
         try {
             await saveSections(book.id, newSections, book.window);
@@ -96,9 +96,22 @@ export const useBookActions = (
     }, [book.sections.locations, updateSections]);
 
     // Notes actions
-    const updateNotes = useCallback(async (notes: string) => {
-        await updateSections({ notes });
-    }, [updateSections]);
+    const addNote = useCallback((note: Note) => {
+        const notes = [...book.sections.notes, note];
+        updateSections({ notes });
+    }, [book.sections.notes, updateSections]);
+
+    const updateNote = useCallback((index: number, note: Note) => {
+        const notes = [...book.sections.notes];
+        notes[index] = note;
+        updateSections({ notes });
+    }, [book.sections.notes, updateSections]);
+
+    const deleteNote = useCallback((index: number) => {
+        const notes = [...book.sections.notes];
+        notes.splice(index, 1);
+        updateSections({ notes });
+    }, [book.sections.notes, updateSections]);
 
     // AI Generation actions
     const generateCharacters = useCallback(async () => {
@@ -184,12 +197,13 @@ export const useBookActions = (
             const contextText = aiService.extractContextText(book, book.window.start, book.window.end);
             const aiNotes = await aiService.generateNotes(contextText);
 
-            const currentNotes = book.sections.notes;
-            const updatedNotes = currentNotes
-                ? `${currentNotes}\n\n--- AI Generated Notes ---\n${aiNotes}`
-                : aiNotes;
+            // Create a new AI-generated note
+            const aiNote: Note = {
+                name: 'AI Generated Notes',
+                notes: aiNotes
+            };
 
-            updateSections({ notes: updatedNotes });
+            addNote(aiNote);
         } catch (error) {
             console.error('Error generating notes:', error);
             throw error;
@@ -220,7 +234,9 @@ export const useBookActions = (
         generateLocations,
 
         // Notes actions
-        updateNotes,
+        addNote,
+        updateNote,
+        deleteNote,
         generateNotes,
 
         // General

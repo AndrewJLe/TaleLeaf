@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { BookNote } from '../../types/book';
 import { Button } from '../ui/Button';
+import { EyeIcon, EyeOffIcon, NotebookIcon, PlusIcon, TagIcon, TrashIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
-import { NotebookIcon, PlusIcon, TrashIcon, TagIcon, EyeOffIcon, EyeIcon } from '../ui/Icons';
 import { Tooltip } from '../ui/Tooltip';
 
 interface NotesListProps {
@@ -59,10 +59,10 @@ export const NotesList: React.FC<NotesListProps> = ({
       .split(',')
       .map(tag => tag.trim())
       .filter(tag => tag.length > 0)
-      .filter((tag, index, arr) => 
+      .filter((tag, index, arr) =>
         arr.findIndex(t => t.toLowerCase() === tag.toLowerCase()) === index
       );
-    
+
     await onUpdateNote(noteId, { tags });
   };
 
@@ -118,7 +118,7 @@ export const NotesList: React.FC<NotesListProps> = ({
             </Button>
           </Tooltip>
         </div>
-        
+
         {notes.length === 0 && (
           <p className="text-gray-600 text-sm">
             Create your first note to organize your thoughts and insights.
@@ -153,7 +153,7 @@ export const NotesList: React.FC<NotesListProps> = ({
                       placeholder="Note title..."
                       className="font-semibold text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-orange-500 rounded-lg px-3 py-1 -mx-3 w-full"
                     />
-                    
+
                     {/* Tags */}
                     <div className="flex items-center gap-2">
                       <TagIcon size={16} className="text-gray-400" />
@@ -165,7 +165,7 @@ export const NotesList: React.FC<NotesListProps> = ({
                         className="text-sm text-gray-600 bg-transparent border border-gray-200 rounded-md px-2 py-1 focus:ring-2 focus:ring-orange-500 focus:border-transparent flex-1"
                       />
                     </div>
-                    
+
                     {/* Tag chips display */}
                     {note.tags.length > 0 && (
                       <div className="flex flex-wrap gap-1">
@@ -180,10 +180,10 @@ export const NotesList: React.FC<NotesListProps> = ({
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="flex items-center gap-2 ml-4">
                     {/* Spoiler Protection Toggle */}
-                    <Tooltip 
+                    <Tooltip
                       text={note.spoilerProtected ? "Remove spoiler protection" : "Protect from spoilers"}
                       id={`spoiler-toggle-${note.id}`}
                     >
@@ -196,7 +196,7 @@ export const NotesList: React.FC<NotesListProps> = ({
                         {note.spoilerProtected ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
                       </Button>
                     </Tooltip>
-                    
+
                     {/* Delete Button */}
                     <Tooltip text="Delete note" id={`delete-note-${note.id}`}>
                       <Button
@@ -223,8 +223,8 @@ export const NotesList: React.FC<NotesListProps> = ({
                       <input
                         type="number"
                         value={note.minVisiblePage || ''}
-                        onChange={(e) => onUpdateNote(note.id, { 
-                          minVisiblePage: e.target.value ? parseInt(e.target.value) : undefined 
+                        onChange={(e) => onUpdateNote(note.id, {
+                          minVisiblePage: e.target.value ? parseInt(e.target.value) : undefined
                         })}
                         placeholder="Page number"
                         className="border border-yellow-300 rounded px-2 py-1 text-sm w-20 focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
@@ -246,7 +246,7 @@ export const NotesList: React.FC<NotesListProps> = ({
                       {isExpanded ? 'Collapse' : 'Expand'}
                     </Button>
                   </div>
-                  
+
                   <ResizableTextArea
                     value={note.body}
                     onChange={(value) => onUpdateNote(note.id, { body: value })}
@@ -255,7 +255,7 @@ export const NotesList: React.FC<NotesListProps> = ({
                     maxRows={isExpanded ? 20 : 8}
                   />
                 </div>
-                
+
                 {/* Metadata */}
                 <div className="text-xs text-gray-400 border-t border-gray-100 pt-2">
                   Created: {new Date(note.createdAt).toLocaleDateString()}

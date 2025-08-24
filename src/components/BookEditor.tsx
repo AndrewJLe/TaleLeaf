@@ -3,14 +3,13 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { featureFlags } from "../constants/featureFlags";
 import { useAIGeneration } from "../hooks/useAIGeneration";
 import { useBookActions } from "../hooks/useBookActions";
 import { useBookNotes } from "../hooks/useBookNotes";
-import { useBookPersistence } from "../hooks/useBookPersistence";
-import { useExpandableFields } from "../hooks/useExpandableFields";
+import { useBookPersistence } from "../hooks/useBookPersistenceNew";
 import { AIMessage, aiService, TokenEstimate } from "../lib/ai-service";
 import { BookEditorProps, TabType } from "../types/book";
-import { featureFlags } from "../constants/featureFlags";
 // Replaced AISettingsModal with consolidated SettingsModal
 import type { Session } from '@supabase/supabase-js';
 import { supabaseClient } from "../lib/supabase-client";
@@ -19,8 +18,8 @@ import ContextWindow from "./ContextWindow";
 import { ChaptersSection } from "./sections/ChaptersSection";
 import { CharactersSection } from "./sections/CharactersSection";
 import { LocationsSection } from "./sections/LocationsSection";
-import { NotesSection } from "./sections/NotesSection";
 import { NotesList } from "./sections/NotesList";
+import { NotesSection } from "./sections/NotesSection";
 import { SettingsModal } from "./SettingsModal";
 import { Button } from "./ui/Button";
 import { DocumentViewer } from "./ui/DocumentViewer";
@@ -30,12 +29,22 @@ import { RateLimitsModal } from "./ui/RateLimitsModal";
 import { SplitLayout } from "./ui/SplitLayout";
 import { TabNavigation } from "./ui/TabNavigation";
 // Token budget display intentionally omitted from header for minimal UI
+import { FeatureFlagDebug } from "./FeatureFlagDebug";
 import { TokenConfirmDialog } from "./ui/TokenConfirmDialog";
 import { Tooltip } from "./ui/Tooltip";
-import { FeatureFlagDebug } from "./FeatureFlagDebug";
 
 export default function BookEditor({ book, onUpdate }: BookEditorProps) {
-    const [local, setLocal] = useState(book);
+    const [local, setLocal] = useState(() => {
+        // Migrate old notes format (string) to new format (Note[])
+        const migratedBook = { ...book };
+        if (typeof migratedBook.sections.notes === 'string') {
+            const oldNotes = migratedBook.sections.notes;
+            migratedBook.sections.notes = oldNotes
+                ? [{ name: 'General Notes', notes: oldNotes }]
+                : [];
+        }
+        return migratedBook;
+    });
     const [message, setMessage] = useState("");
     const [chat, setChat] = useState<AIMessage[]>([]);
     const [isEditingPageText, setIsEditingPageText] = useState(false);
@@ -62,7 +71,6 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     const [isEditingTitle, setIsEditingTitle] = useState(false);
 
     // Custom hooks for state management
-    const { isExpanded, toggleExpanded } = useExpandableFields();
     const {
         aiGenerationState,
         isAILoading,
@@ -106,7 +114,9 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         updateLocation,
         deleteLocation,
         generateLocations,
-        updateNotes,
+        addNote: addBookNote,
+        updateNote: updateBookNote,
+        deleteNote: deleteBookNote,
         generateNotes,
         updateBook
     } = useBookActions(local, (updatedBook) => {
@@ -307,7 +317,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                     <SettingsIcon size={20} />
                                 </Button>
                             </Tooltip>
-                            
+
                             {/* Database Status Indicator */}
                             {isPersisting && (
                                 <div className="text-xs text-gray-500 flex items-center gap-1">
@@ -403,33 +413,19 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                 <div className="mt-6">
                                     {tab === 'characters' && (
                                         <CharactersSection
-                                            characters={local.sections.characters.map((char, index) => ({
-                                                id: index.toString(),
-                                                name: char.name,
-                                                description: char.notes
-                                            }))}
-                                            isGeneratingCharacter={aiGenerationState.characters}
-                                            expandedCharacters={local.sections.characters.reduce((acc, char, index) => ({
-                                                ...acc,
-                                                [index.toString()]: isExpanded(index.toString())
-                                            }), {})}
-                                            toggleCharacterExpansion={(id) => toggleExpanded(id)}
-                                            updateCharacter={(id, field, value) => {
-                                                const index = parseInt(id);
-                                                const character = local.sections.characters[index];
-                                                if (field === 'name') {
-                                                    updateCharacter(index, { ...character, name: value });
-                                                } else if (field === 'description') {
-                                                    updateCharacter(index, { ...character, notes: value });
-                                                }
-                                            }}
-                                            deleteCharacter={(id) => deleteCharacter(parseInt(id))}
-                                            addCharacter={() => addCharacter({ name: '', notes: '' })}
-                                            generateCharacter={() => confirmAIAction(
+                                            characters={local.sections.characters}
+                                            onAddCharacter={addCharacter}
+                                            onUpdateCharacter={updateCharacter}
+                                            onDeleteCharacter={deleteCharacter}
+                                            onGenerateCharacters={() => confirmAIAction(
                                                 'generate characters',
                                                 'Analyze the provided text and identify all characters mentioned',
                                                 generateCharacters
                                             )}
+                                            isGenerating={aiGenerationState.characters}
+                                            isSaving={isPersisting}
+                                            lastSaved={lastSaved}
+                                            saveError={persistError}
                                         />
                                     )}
 
@@ -485,7 +481,9 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                             ) : (
                                                 <NotesSection
                                                     notes={local.sections.notes}
-                                                    onUpdateNotes={updateNotes}
+                                                    onAddNote={addBookNote}
+                                                    onUpdateNote={updateBookNote}
+                                                    onDeleteNote={deleteBookNote}
                                                     onGenerateNotes={() => confirmAIAction(
                                                         'generate notes',
                                                         'Create insightful reading notes for the provided text',

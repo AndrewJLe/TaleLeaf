@@ -13,6 +13,11 @@ export interface Location {
     notes: string;
 }
 
+export interface Note {
+    name: string;
+    notes: string;
+}
+
 // TODO N1: Multi-note normalized model
 export interface BookNote {
     id: string;
@@ -44,7 +49,7 @@ export interface BookSections {
     characters: Character[];
     chapters: Chapter[];
     locations: Location[];
-    notes: string;
+    notes: Note[];
 }
 
 export interface PageData {
