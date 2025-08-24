@@ -103,6 +103,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         addCharacter,
         updateCharacter,
         deleteCharacter,
+        moveCharacter,
         enhanceCharacter,
         generateCharacters,
         addChapter,
@@ -113,10 +114,12 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         addLocation,
         updateLocation,
         deleteLocation,
+        moveLocation,
         generateLocations,
         addNote: addBookNote,
         updateNote: updateBookNote,
         deleteNote: deleteBookNote,
+        moveNote,
         generateNotes,
         updateBook
     } = useBookActions(local, (updatedBook) => {
@@ -417,6 +420,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                             onAddCharacter={addCharacter}
                                             onUpdateCharacter={updateCharacter}
                                             onDeleteCharacter={deleteCharacter}
+                                            onMoveCharacter={moveCharacter}
                                             onGenerateCharacters={() => confirmAIAction(
                                                 'generate characters',
                                                 'Analyze the provided text and identify all characters mentioned',
@@ -451,6 +455,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                             onAddLocation={addLocation}
                                             onUpdateLocation={updateLocation}
                                             onDeleteLocation={deleteLocation}
+                                            onMoveLocation={moveLocation}
                                             onGenerateLocations={() => confirmAIAction(
                                                 'generate locations',
                                                 'Analyze the provided text and identify all locations, places, and settings mentioned',
@@ -484,6 +489,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                     onAddNote={addBookNote}
                                                     onUpdateNote={updateBookNote}
                                                     onDeleteNote={deleteBookNote}
+                                                    onMoveNote={moveNote}
                                                     onGenerateNotes={() => confirmAIAction(
                                                         'generate notes',
                                                         'Create insightful reading notes for the provided text',

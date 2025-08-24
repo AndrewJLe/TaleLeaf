@@ -48,6 +48,17 @@ export const useBookActions = (
         updateSections({ characters });
     }, [book.sections.characters, updateSections]);
 
+    const moveCharacter = useCallback((index: number, direction: 'up' | 'down') => {
+        const characters = [...book.sections.characters];
+        const newIndex = direction === 'up' ? index - 1 : index + 1;
+
+        if (newIndex < 0 || newIndex >= characters.length) return;
+
+        const [item] = characters.splice(index, 1);
+        characters.splice(newIndex, 0, item);
+        updateSections({ characters });
+    }, [book.sections.characters, updateSections]);
+
     // Chapter actions
     const addChapter = useCallback((chapter: Chapter) => {
         const chapters = [...book.sections.chapters, chapter];
@@ -95,6 +106,17 @@ export const useBookActions = (
         updateSections({ locations });
     }, [book.sections.locations, updateSections]);
 
+    const moveLocation = useCallback((index: number, direction: 'up' | 'down') => {
+        const locations = [...book.sections.locations];
+        const newIndex = direction === 'up' ? index - 1 : index + 1;
+
+        if (newIndex < 0 || newIndex >= locations.length) return;
+
+        const [item] = locations.splice(index, 1);
+        locations.splice(newIndex, 0, item);
+        updateSections({ locations });
+    }, [book.sections.locations, updateSections]);
+
     // Notes actions
     const addNote = useCallback((note: Note) => {
         const notes = [...book.sections.notes, note];
@@ -110,6 +132,17 @@ export const useBookActions = (
     const deleteNote = useCallback((index: number) => {
         const notes = [...book.sections.notes];
         notes.splice(index, 1);
+        updateSections({ notes });
+    }, [book.sections.notes, updateSections]);
+
+    const moveNote = useCallback((index: number, direction: 'up' | 'down') => {
+        const notes = [...book.sections.notes];
+        const newIndex = direction === 'up' ? index - 1 : index + 1;
+
+        if (newIndex < 0 || newIndex >= notes.length) return;
+
+        const [item] = notes.splice(index, 1);
+        notes.splice(newIndex, 0, item);
         updateSections({ notes });
     }, [book.sections.notes, updateSections]);
 
@@ -217,6 +250,7 @@ export const useBookActions = (
         addCharacter,
         updateCharacter,
         deleteCharacter,
+        moveCharacter,
         enhanceCharacter,
         generateCharacters,
 
@@ -231,12 +265,14 @@ export const useBookActions = (
         addLocation,
         updateLocation,
         deleteLocation,
+        moveLocation,
         generateLocations,
 
         // Notes actions
         addNote,
         updateNote,
         deleteNote,
+        moveNote,
         generateNotes,
 
         // General

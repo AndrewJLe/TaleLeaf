@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Note } from '../../types/book';
 import { Button } from '../ui/Button';
-import { NotebookIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon } from '../ui/Icons';
+import { ChevronDownIcon, ChevronUpIcon, NotebookIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
 import { SaveStateIndicator } from '../ui/SaveStateIndicator';
 import { Tooltip } from '../ui/Tooltip';
@@ -11,6 +11,7 @@ interface NotesSectionProps {
     onAddNote: (note: Note) => void;
     onUpdateNote: (index: number, note: Note) => void;
     onDeleteNote: (index: number) => void;
+    onMoveNote: (index: number, direction: 'up' | 'down') => void;
     onGenerateNotes: () => void;
     isGenerating: boolean;
 }
@@ -20,6 +21,7 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
     onAddNote,
     onUpdateNote,
     onDeleteNote,
+    onMoveNote,
     onGenerateNotes,
     isGenerating
 }) => {
@@ -150,14 +152,40 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
                                         hasUnsavedChanges={unsavedChanges[index] || false}
                                         showSaved={showSavedStates[index] || false}
                                     />
+                                    <Tooltip
+                                        text="Move this note up in the order"
+                                        id={`note-up-${index}`}
+                                    >
+                                        <Button
+                                            onClick={() => onMoveNote(index, 'up')}
+                                            variant="ghost"
+                                            size="sm"
+                                            disabled={index === 0}
+                                        >
+                                            <ChevronUpIcon size={14} />
+                                        </Button>
+                                    </Tooltip>
+                                    <Tooltip
+                                        text="Move this note down in the order"
+                                        id={`note-down-${index}`}
+                                    >
+                                        <Button
+                                            onClick={() => onMoveNote(index, 'down')}
+                                            variant="ghost"
+                                            size="sm"
+                                            disabled={index === notes.length - 1}
+                                        >
+                                            <ChevronDownIcon size={14} />
+                                        </Button>
+                                    </Tooltip>
                                     <button
                                         onClick={() => handleSaveNote(index)}
                                         disabled={savingStates[index] || !unsavedChanges[index]}
                                         className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 ${savingStates[index]
-                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                : unsavedChanges[index]
-                                                    ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
-                                                    : 'bg-emerald-100 text-emerald-700 cursor-default'
+                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                            : unsavedChanges[index]
+                                                ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
+                                                : 'bg-emerald-100 text-emerald-700 cursor-default'
                                             }`}
                                         title="Ctrl+Enter to save"
                                     >

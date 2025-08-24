@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Location } from '../../types/book';
 import { Button } from '../ui/Button';
-import { MapPinIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon } from '../ui/Icons';
+import { ChevronDownIcon, ChevronUpIcon, MapPinIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
 import { SaveStateIndicator } from '../ui/SaveStateIndicator';
 import { Tooltip } from '../ui/Tooltip';
@@ -11,6 +11,7 @@ interface LocationsSectionProps {
     onAddLocation: (location: Location) => void;
     onUpdateLocation: (index: number, location: Location) => void;
     onDeleteLocation: (index: number) => void;
+    onMoveLocation: (index: number, direction: 'up' | 'down') => void;
     onGenerateLocations: () => void;
     isGenerating: boolean;
 }
@@ -20,6 +21,7 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
     onAddLocation,
     onUpdateLocation,
     onDeleteLocation,
+    onMoveLocation,
     onGenerateLocations,
     isGenerating
 }) => {
@@ -150,14 +152,40 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
                                             hasUnsavedChanges={unsavedChanges[index] || false}
                                             showSaved={showSavedStates[index] || false}
                                         />
+                                        <Tooltip
+                                            text="Move this location up in the order"
+                                            id={`location-up-${index}`}
+                                        >
+                                            <Button
+                                                onClick={() => onMoveLocation(index, 'up')}
+                                                variant="ghost"
+                                                size="sm"
+                                                disabled={index === 0}
+                                            >
+                                                <ChevronUpIcon size={14} />
+                                            </Button>
+                                        </Tooltip>
+                                        <Tooltip
+                                            text="Move this location down in the order"
+                                            id={`location-down-${index}`}
+                                        >
+                                            <Button
+                                                onClick={() => onMoveLocation(index, 'down')}
+                                                variant="ghost"
+                                                size="sm"
+                                                disabled={index === locations.length - 1}
+                                            >
+                                                <ChevronDownIcon size={14} />
+                                            </Button>
+                                        </Tooltip>
                                         <button
                                             onClick={() => handleSaveLocation(index)}
                                             disabled={savingStates[index] || !unsavedChanges[index]}
                                             className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 ${savingStates[index]
-                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                    : unsavedChanges[index]
-                                                        ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
-                                                        : 'bg-emerald-100 text-emerald-700 cursor-default'
+                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                : unsavedChanges[index]
+                                                    ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
+                                                    : 'bg-emerald-100 text-emerald-700 cursor-default'
                                                 }`}
                                             title="Ctrl+Enter to save"
                                         >

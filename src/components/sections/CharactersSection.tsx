@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Character } from '../../types/book';
 import { Button } from '../ui/Button';
-import { PlusIcon, SaveIcon, SparklesIcon, TrashIcon, UsersIcon } from '../ui/Icons';
+import { ChevronDownIcon, ChevronUpIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon, UsersIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
 import { SaveStateIndicator } from '../ui/SaveStateIndicator';
 import { SaveStatus } from '../ui/SaveStatus';
@@ -12,6 +12,7 @@ interface CharactersSectionProps {
     onAddCharacter: (character: Character) => void;
     onUpdateCharacter: (index: number, character: Character) => void;
     onDeleteCharacter: (index: number) => void;
+    onMoveCharacter: (index: number, direction: 'up' | 'down') => void;
     onGenerateCharacters: () => void;
     isGenerating: boolean;
     isSaving?: boolean;
@@ -24,6 +25,7 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
     onAddCharacter,
     onUpdateCharacter,
     onDeleteCharacter,
+    onMoveCharacter,
     onGenerateCharacters,
     isGenerating,
     isSaving = false,
@@ -170,6 +172,32 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                                             showSaved={showSavedStates[index]}
                                             hasUnsavedChanges={unsavedChanges[index]}
                                         />
+                                        <Tooltip
+                                            text="Move this character up in the order"
+                                            id={`character-up-${index}`}
+                                        >
+                                            <Button
+                                                onClick={() => onMoveCharacter(index, 'up')}
+                                                variant="ghost"
+                                                size="sm"
+                                                disabled={index === 0}
+                                            >
+                                                <ChevronUpIcon size={14} />
+                                            </Button>
+                                        </Tooltip>
+                                        <Tooltip
+                                            text="Move this character down in the order"
+                                            id={`character-down-${index}`}
+                                        >
+                                            <Button
+                                                onClick={() => onMoveCharacter(index, 'down')}
+                                                variant="ghost"
+                                                size="sm"
+                                                disabled={index === characters.length - 1}
+                                            >
+                                                <ChevronDownIcon size={14} />
+                                            </Button>
+                                        </Tooltip>
                                         <Tooltip
                                             text="Save character notes"
                                             id={`save-character-${index}`}
