@@ -289,9 +289,9 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
                                             </Button>
                                         </Tooltip>
                                     </div>
-                                    
+
                                     <div className="w-px h-6 bg-gray-200"></div>
-                                    
+
                                     <Tooltip
                                         text="Remove this note from your list"
                                         id={`delete-note-${note.id}`}

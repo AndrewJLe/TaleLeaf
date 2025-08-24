@@ -298,9 +298,9 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                                                 </Button>
                                             </Tooltip>
                                         </div>
-                                        
+
                                         <div className="w-px h-6 bg-gray-200"></div>
-                                        
+
                                         <Tooltip
                                             text="Remove this character from your list"
                                             id={`delete-character-${character.id}`}

@@ -222,7 +222,7 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
                                             <div className="w-2 h-2 bg-amber-500 rounded-full flex-shrink-0" title="Unsaved changes" />
                                         )}
                                     </div>
-                                    
+
                                     {/* Chapter-level Actions */}
                                     <Tooltip
                                         text="Generate an AI-powered summary of this chapter from your selected text"
@@ -297,9 +297,9 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
                                                 </Button>
                                             </Tooltip>
                                         </div>
-                                        
+
                                         <div className="w-px h-6 bg-gray-200"></div>
-                                        
+
                                         <Tooltip
                                             text="Remove this chapter from your list"
                                             id={`delete-chapter-${chapter.id}`}
