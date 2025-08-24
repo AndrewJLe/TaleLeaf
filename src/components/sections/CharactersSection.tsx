@@ -243,11 +243,6 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                             <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                                 {/* Primary Actions - Save and Status */}
                                 <div className="flex items-center gap-2 order-2 sm:order-1">
-                                    <SaveStateIndicator
-                                        isSaving={savingStates[character.id]}
-                                        showSaved={showSavedStates[character.id]}
-                                        hasUnsavedChanges={dirty[character.id]}
-                                    />
                                     <button
                                         onClick={() => handleSaveCharacter(character)}
                                         disabled={savingStates[character.id] || !dirty[character.id]}
@@ -264,6 +259,11 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                                             {savingStates[character.id] ? 'Saving...' : 'Save'}
                                         </span>
                                     </button>
+                                    <SaveStateIndicator
+                                        isSaving={savingStates[character.id]}
+                                        showSaved={showSavedStates[character.id]}
+                                        hasUnsavedChanges={dirty[character.id]}
+                                    />
                                 </div>
 
                                 {/* Secondary Actions - Navigation and Tools */}

@@ -240,11 +240,6 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
                             <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                                 {/* Primary Actions - Save and Status */}
                                 <div className="flex items-center gap-2 order-2 sm:order-1">
-                                    <SaveStateIndicator
-                                        isSaving={savingStates[chapter.id] || false}
-                                        hasUnsavedChanges={dirty[chapter.id] || false}
-                                        showSaved={showSavedStates[chapter.id] || false}
-                                    />
                                     <button
                                         onClick={() => handleSaveChapter(chapter)}
                                         disabled={savingStates[chapter.id] || !dirty[chapter.id]}
@@ -261,6 +256,11 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
                                             {savingStates[chapter.id] ? 'Saving...' : 'Save'}
                                         </span>
                                     </button>
+                                    <SaveStateIndicator
+                                        isSaving={savingStates[chapter.id] || false}
+                                        hasUnsavedChanges={dirty[chapter.id] || false}
+                                        showSaved={showSavedStates[chapter.id] || false}
+                                    />
                                 </div>
 
                                 {/* Secondary Actions - Navigation and Delete Only */}

@@ -235,11 +235,6 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
                             <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                                 {/* Primary Actions - Save and Status */}
                                 <div className="flex items-center gap-2 order-2 sm:order-1">
-                                    <SaveStateIndicator
-                                        isSaving={savingStates[location.id] || false}
-                                        hasUnsavedChanges={dirty[location.id] || false}
-                                        showSaved={showSavedStates[location.id] || false}
-                                    />
                                     <button
                                         onClick={() => handleSaveLocation(location)}
                                         disabled={savingStates[location.id] || !dirty[location.id]}
@@ -256,6 +251,11 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
                                             {savingStates[location.id] ? 'Saving...' : 'Save'}
                                         </span>
                                     </button>
+                                    <SaveStateIndicator
+                                        isSaving={savingStates[location.id] || false}
+                                        hasUnsavedChanges={dirty[location.id] || false}
+                                        showSaved={showSavedStates[location.id] || false}
+                                    />
                                 </div>
 
                                 {/* Secondary Actions - Navigation and Tools */}

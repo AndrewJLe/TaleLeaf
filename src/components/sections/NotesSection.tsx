@@ -236,11 +236,6 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
                             <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                                 {/* Primary Actions - Save and Status */}
                                 <div className="flex items-center gap-2 order-2 sm:order-1">
-                                    <SaveStateIndicator
-                                        isSaving={savingStates[note.id] || false}
-                                        hasUnsavedChanges={dirty[note.id] || false}
-                                        showSaved={showSavedStates[note.id] || false}
-                                    />
                                     <button
                                         onClick={() => handleSaveNote(note)}
                                         disabled={savingStates[note.id] || !dirty[note.id]}
@@ -257,6 +252,11 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
                                             {savingStates[note.id] ? 'Saving...' : 'Save'}
                                         </span>
                                     </button>
+                                    <SaveStateIndicator
+                                        isSaving={savingStates[note.id] || false}
+                                        hasUnsavedChanges={dirty[note.id] || false}
+                                        showSaved={showSavedStates[note.id] || false}
+                                    />
                                 </div>
 
                                 {/* Secondary Actions - Navigation and Tools */}
