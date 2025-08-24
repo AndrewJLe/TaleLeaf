@@ -1,5 +1,6 @@
 "use client";
 
+import type { Session } from '@supabase/supabase-js';
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -9,11 +10,9 @@ import { useBookActions } from "../hooks/useBookActions";
 import { useBookNotes } from "../hooks/useBookNotes";
 import { useBookPersistence } from "../hooks/useBookPersistenceNew";
 import { AIMessage, aiService, TokenEstimate } from "../lib/ai-service";
-import { BookEditorProps, TabType } from "../types/book";
-// Replaced AISettingsModal with consolidated SettingsModal
-import type { Session } from '@supabase/supabase-js';
 import { supabaseClient } from "../lib/supabase-client";
 import { isSupabaseEnabled } from "../lib/supabase-enabled";
+import { BookEditorProps, TabType } from "../types/book";
 import ContextWindow from "./ContextWindow";
 import { ChaptersSection } from "./sections/ChaptersSection";
 import { CharactersSection } from "./sections/CharactersSection";
@@ -40,9 +39,31 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         if (typeof migratedBook.sections.notes === 'string') {
             const oldNotes = migratedBook.sections.notes;
             migratedBook.sections.notes = oldNotes
-                ? [{ name: 'General Notes', notes: oldNotes }]
+                ? [{ id: crypto.randomUUID(), name: 'General Notes', notes: oldNotes }]
                 : [];
         }
+
+        // Backfill IDs for existing entities that don't have them
+        migratedBook.sections.characters = migratedBook.sections.characters.map(char => ({
+            ...char,
+            id: char.id || crypto.randomUUID()
+        }));
+        
+        migratedBook.sections.chapters = migratedBook.sections.chapters.map(chapter => ({
+            ...chapter,
+            id: chapter.id || crypto.randomUUID()
+        }));
+        
+        migratedBook.sections.locations = migratedBook.sections.locations.map(location => ({
+            ...location,
+            id: location.id || crypto.randomUUID()
+        }));
+        
+        migratedBook.sections.notes = migratedBook.sections.notes.map(note => ({
+            ...note,
+            id: note.id || crypto.randomUUID()
+        }));
+
         return migratedBook;
     });
     const [message, setMessage] = useState("");
@@ -446,6 +467,9 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                 () => generateChapterSummary(chapterIndex)
                                             )}
                                             isGenerating={aiGenerationState.chapters}
+                                            isSaving={isPersisting}
+                                            lastSaved={lastSaved}
+                                            saveError={persistError}
                                         />
                                     )}
 
@@ -462,6 +486,9 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                 generateLocations
                                             )}
                                             isGenerating={aiGenerationState.locations}
+                                            isSaving={isPersisting}
+                                            lastSaved={lastSaved}
+                                            saveError={persistError}
                                         />
                                     )}
 
@@ -496,6 +523,9 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                         generateNotes
                                                     )}
                                                     isGenerating={aiGenerationState.notes}
+                                                    isSaving={isPersisting}
+                                                    lastSaved={lastSaved}
+                                                    saveError={persistError}
                                                 />
                                             )}
                                         </>

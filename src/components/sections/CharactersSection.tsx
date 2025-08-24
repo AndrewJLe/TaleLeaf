@@ -9,7 +9,7 @@ import { Tooltip } from '../ui/Tooltip';
 
 interface CharactersSectionProps {
     characters: Character[];
-    onAddCharacter: (character: Character) => void;
+    onAddCharacter: (character: Omit<Character, 'id'>) => void;
     onUpdateCharacter: (index: number, character: Character) => void;
     onDeleteCharacter: (index: number) => void;
     onMoveCharacter: (index: number, direction: 'up' | 'down') => void;
@@ -33,56 +33,113 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
     saveError = null
 }) => {
     const [newCharacterName, setNewCharacterName] = useState('');
-    const [localCharacters, setLocalCharacters] = useState<Character[]>(characters);
-    const [savingStates, setSavingStates] = useState<{ [key: number]: boolean }>({});
-    const [unsavedChanges, setUnsavedChanges] = useState<{ [key: number]: boolean }>({});
-    const [showSavedStates, setShowSavedStates] = useState<{ [key: number]: boolean }>({});
+    
+    // ID-based draft tracking
+    const [drafts, setDrafts] = useState<Record<string, string>>({});
+    const [dirty, setDirty] = useState<Record<string, boolean>>({});
+    const [savingStates, setSavingStates] = useState<Record<string, boolean>>({});
+    const [showSavedStates, setShowSavedStates] = useState<Record<string, boolean>>({});
 
-    // Sync with prop changes
-    useEffect(() => {
-        setLocalCharacters(characters);
-        setUnsavedChanges({});
-        setShowSavedStates({});
+    // Create character lookup map for easy access
+    const characterMap = React.useMemo(() => {
+        return characters.reduce((acc, char, index) => {
+            acc[char.id] = { character: char, index };
+            return acc;
+        }, {} as Record<string, { character: Character; index: number }>);
     }, [characters]);
 
-    // Track changes for individual characters
-    const handleCharacterNotesChange = (index: number, notes: string) => {
-        const updatedCharacters = [...localCharacters];
-        updatedCharacters[index] = { ...updatedCharacters[index], notes };
-        setLocalCharacters(updatedCharacters);
+    // Clean up drafts when characters are removed
+    useEffect(() => {
+        const currentIds = new Set(characters.map(c => c.id));
+        setDrafts(prev => {
+            const cleaned = { ...prev };
+            Object.keys(cleaned).forEach(id => {
+                if (!currentIds.has(id)) {
+                    delete cleaned[id];
+                }
+            });
+            return cleaned;
+        });
+        setDirty(prev => {
+            const cleaned = { ...prev };
+            Object.keys(cleaned).forEach(id => {
+                if (!currentIds.has(id)) {
+                    delete cleaned[id];
+                }
+            });
+            return cleaned;
+        });
+    }, [characters]);
 
-        setUnsavedChanges(prev => ({
-            ...prev,
-            [index]: notes !== characters[index]?.notes
+    // Get display value (draft or persisted)
+    const getDisplayValue = (character: Character): string => {
+        return drafts[character.id] ?? character.notes;
+    };
+
+    // Track changes for individual characters
+    const handleCharacterNotesChange = (character: Character, notes: string) => {
+        setDrafts(prev => ({ ...prev, [character.id]: notes }));
+        setDirty(prev => ({ 
+            ...prev, 
+            [character.id]: notes !== character.notes 
         }));
     };
 
     // Save individual character
-    const handleSaveCharacter = async (index: number) => {
-        if (!unsavedChanges[index]) return;
+    const handleSaveCharacter = async (character: Character) => {
+        if (!dirty[character.id]) return;
 
-        setSavingStates(prev => ({ ...prev, [index]: true }));
-        setShowSavedStates(prev => ({ ...prev, [index]: false }));
+        const characterInfo = characterMap[character.id];
+        if (!characterInfo) return;
+
+        setSavingStates(prev => ({ ...prev, [character.id]: true }));
+        setShowSavedStates(prev => ({ ...prev, [character.id]: false }));
+        
         try {
             // Ensure minimum 800ms for better UX perception
             await Promise.all([
-                onUpdateCharacter(index, localCharacters[index]),
+                onUpdateCharacter(characterInfo.index, { 
+                    ...character, 
+                    notes: drafts[character.id] 
+                }),
                 new Promise(resolve => setTimeout(resolve, 800))
             ]);
 
-            setUnsavedChanges(prev => ({ ...prev, [index]: false }));
-            setShowSavedStates(prev => ({ ...prev, [index]: true }));
+            // Clear draft and mark as clean
+            setDrafts(prev => {
+                const { [character.id]: _, ...rest } = prev;
+                return rest;
+            });
+            setDirty(prev => ({ ...prev, [character.id]: false }));
+            setShowSavedStates(prev => ({ ...prev, [character.id]: true }));
 
             // Hide the "saved" indicator after 2 seconds
             setTimeout(() => {
-                setShowSavedStates(prev => ({ ...prev, [index]: false }));
+                setShowSavedStates(prev => ({ ...prev, [character.id]: false }));
             }, 2000);
         } catch (error) {
             console.error('Failed to save character:', error);
         } finally {
-            setSavingStates(prev => ({ ...prev, [index]: false }));
+            setSavingStates(prev => ({ ...prev, [character.id]: false }));
         }
     };
+
+    // Save all dirty characters
+    const handleSaveAll = async () => {
+        const dirtyIds = Object.keys(dirty).filter(id => dirty[id]);
+        if (dirtyIds.length === 0) return;
+
+        // Save them sequentially for better UX feedback
+        for (const id of dirtyIds) {
+            const characterInfo = characterMap[id];
+            if (characterInfo) {
+                await handleSaveCharacter(characterInfo.character);
+            }
+        }
+    };
+
+    // Count dirty characters for UI
+    const dirtyCount = Object.values(dirty).filter(Boolean).length;
 
     const handleAddCharacter = () => {
         if (!newCharacterName.trim()) return;
@@ -93,38 +150,49 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
     return (
         <div className="space-y-6">
             <div className="p-4 sm:p-6 bg-gray-50 rounded-xl border border-gray-200">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-amber-100 rounded-lg flex-shrink-0">
-                            <UsersIcon size={20} className="text-amber-600" />
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-amber-100 rounded-lg flex-shrink-0">
+                                <UsersIcon size={20} className="text-amber-600" />
+                            </div>
+                            <div>
+                                <h4 className="text-lg font-semibold text-gray-900">Characters ({characters.length})</h4>
+                                <SaveStatus
+                                    isSaving={isSaving}
+                                    lastSaved={lastSaved}
+                                    error={saveError}
+                                    className="mt-0.5"
+                                />
+                            </div>
                         </div>
-                        <div>
-                            <h4 className="text-lg font-semibold text-gray-900">Characters ({characters.length})</h4>
-                            <SaveStatus
-                                isSaving={isSaving}
-                                lastSaved={lastSaved}
-                                error={saveError}
-                                className="mt-0.5"
-                            />
+                        <div className="flex items-center gap-3">
+                            {dirtyCount > 0 && (
+                                <Button
+                                    onClick={handleSaveAll}
+                                    variant="secondary"
+                                    size="sm"
+                                    className="bg-emerald-600 text-white hover:bg-emerald-700"
+                                >
+                                    <SaveIcon size={14} />
+                                    Save All ({dirtyCount})
+                                </Button>
+                            )}
+                            <Tooltip
+                                text="Use AI to automatically find and extract characters mentioned in your selected text"
+                                id="characters-ai-generate"
+                            >
+                                <Button
+                                    onClick={onGenerateCharacters}
+                                    isLoading={isGenerating}
+                                    variant="primary"
+                                    className="w-full sm:w-auto"
+                                >
+                                    <SparklesIcon size={16} />
+                                    {isGenerating ? 'Generating...' : 'AI Generate'}
+                                </Button>
+                            </Tooltip>
                         </div>
-                    </div>
-                    <Tooltip
-                        text="Use AI to automatically find and extract characters mentioned in your selected text"
-                        id="characters-ai-generate"
-                    >
-                        <Button
-                            onClick={onGenerateCharacters}
-                            isLoading={isGenerating}
-                            variant="primary"
-                            className="w-full sm:w-auto"
-                        >
-                            <SparklesIcon size={16} />
-                            {isGenerating ? 'Generating...' : 'AI Generate'}
-                        </Button>
-                    </Tooltip>
-                </div>
-
-                {/* Manual Add Character */}
+                    </div>                {/* Manual Add Character */}
                 <div className="flex flex-col sm:flex-row gap-3">
                     <input
                         type="text"
@@ -152,29 +220,34 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
 
             <div className="space-y-4">
                 {characters.map((character, index) => (
-                    <div key={index} className="p-4 sm:p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
+                    <div key={character.id} className="p-4 sm:p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
                         <div className="flex flex-col sm:flex-row sm:items-start gap-4">
                             <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
                                 <UsersIcon size={24} className="text-amber-600" />
                             </div>
                             <div className="flex-1 space-y-4 min-w-0">
                                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-                                    <input
-                                        type="text"
-                                        value={character.name}
-                                        onChange={(e) => onUpdateCharacter(index, { ...character, name: e.target.value })}
-                                        className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-lg px-3 py-1 -mx-3 w-full sm:w-auto"
-                                        placeholder="Character name"
-                                    />
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            value={character.name}
+                                            onChange={(e) => onUpdateCharacter(index, { ...character, name: e.target.value })}
+                                            className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-lg px-3 py-1 -mx-3 w-full sm:w-auto"
+                                            placeholder="Character name"
+                                        />
+                                        {dirty[character.id] && (
+                                            <div className="w-2 h-2 bg-amber-500 rounded-full" title="Unsaved changes" />
+                                        )}
+                                    </div>
                                     <div className="flex items-center gap-2">
                                         <SaveStateIndicator
-                                            isSaving={savingStates[index]}
-                                            showSaved={showSavedStates[index]}
-                                            hasUnsavedChanges={unsavedChanges[index]}
+                                            isSaving={savingStates[character.id]}
+                                            showSaved={showSavedStates[character.id]}
+                                            hasUnsavedChanges={dirty[character.id]}
                                         />
                                         <Tooltip
                                             text="Move this character up in the order"
-                                            id={`character-up-${index}`}
+                                            id={`character-up-${character.id}`}
                                         >
                                             <Button
                                                 onClick={() => onMoveCharacter(index, 'up')}
@@ -187,7 +260,7 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                                         </Tooltip>
                                         <Tooltip
                                             text="Move this character down in the order"
-                                            id={`character-down-${index}`}
+                                            id={`character-down-${character.id}`}
                                         >
                                             <Button
                                                 onClick={() => onMoveCharacter(index, 'down')}
@@ -200,22 +273,22 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                                         </Tooltip>
                                         <Tooltip
                                             text="Save character notes"
-                                            id={`save-character-${index}`}
+                                            id={`save-character-${character.id}`}
                                         >
                                             <Button
-                                                onClick={() => handleSaveCharacter(index)}
-                                                disabled={savingStates[index] || !unsavedChanges[index]}
+                                                onClick={() => handleSaveCharacter(character)}
+                                                disabled={savingStates[character.id] || !dirty[character.id]}
                                                 variant="secondary"
                                                 size="sm"
-                                                className={`${unsavedChanges[index] ? 'bg-emerald-600 text-white hover:bg-emerald-700' : ''}`}
+                                                className={`${dirty[character.id] ? 'bg-emerald-600 text-white hover:bg-emerald-700' : ''}`}
                                             >
                                                 <SaveIcon size={14} />
-                                                {savingStates[index] ? 'Saving...' : 'Save'}
+                                                {savingStates[character.id] ? 'Saving...' : 'Save'}
                                             </Button>
                                         </Tooltip>
                                         <Tooltip
                                             text="Remove this character from your list"
-                                            id={`delete-character-${index}`}
+                                            id={`delete-character-${character.id}`}
                                         >
                                             <Button
                                                 onClick={() => onDeleteCharacter(index)}
@@ -232,14 +305,14 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                                 <div className="space-y-2">
                                     <label className="text-sm text-gray-600 font-medium">Character Description</label>
                                     <ResizableTextArea
-                                        value={localCharacters[index]?.notes || ''}
-                                        onChange={(notes) => handleCharacterNotesChange(index, notes)}
-                                        onSave={() => handleSaveCharacter(index)}
+                                        value={getDisplayValue(character)}
+                                        onChange={(notes) => handleCharacterNotesChange(character, notes)}
+                                        onSave={() => handleSaveCharacter(character)}
                                         placeholder="Describe this character, their personality, role, background..."
                                         minRows={3}
                                         maxRows={15}
                                     />
-                                    {unsavedChanges[index] && (
+                                    {dirty[character.id] && (
                                         <p className="text-xs text-gray-500">
                                             Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> or click Save to save your changes
                                         </p>

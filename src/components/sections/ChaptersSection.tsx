@@ -4,16 +4,20 @@ import { Button } from '../ui/Button';
 import { BookOpenIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
 import { SaveStateIndicator } from '../ui/SaveStateIndicator';
+import { SaveStatus } from '../ui/SaveStatus';
 import { Tooltip } from '../ui/Tooltip';
 
 interface ChaptersSectionProps {
     chapters: Chapter[];
-    onAddChapter: (chapter: Chapter) => void;
+    onAddChapter: (chapter: Omit<Chapter, 'id'>) => void;
     onUpdateChapter: (index: number, chapter: Chapter) => void;
     onDeleteChapter: (index: number) => void;
     onMoveChapter: (index: number, direction: 'up' | 'down') => void;
     onGenerateSummary: (index: number) => void;
     isGenerating: boolean;
+    isSaving?: boolean;
+    lastSaved?: Date | null;
+    saveError?: string | null;
 }
 
 export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
@@ -23,59 +27,119 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
     onDeleteChapter,
     onMoveChapter,
     onGenerateSummary,
-    isGenerating
+    isGenerating,
+    isSaving = false,
+    lastSaved = null,
+    saveError = null
 }) => {
     const [newChapterName, setNewChapterName] = useState('');
-    const [localChapters, setLocalChapters] = useState<Chapter[]>(chapters);
-    const [savingStates, setSavingStates] = useState<{ [key: number]: boolean }>({});
-    const [unsavedChanges, setUnsavedChanges] = useState<{ [key: number]: boolean }>({});
-    const [showSavedStates, setShowSavedStates] = useState<{ [key: number]: boolean }>({});
+    
+    // ID-based draft tracking
+    const [drafts, setDrafts] = useState<Record<string, string>>({});
+    const [dirty, setDirty] = useState<Record<string, boolean>>({});
+    const [savingStates, setSavingStates] = useState<Record<string, boolean>>({});
+    const [showSavedStates, setShowSavedStates] = useState<Record<string, boolean>>({});
 
-    // Sync with prop changes
-    useEffect(() => {
-        setLocalChapters(chapters);
-        setUnsavedChanges({});
-        setShowSavedStates({});
+    // Create chapter lookup map for easy access
+    const chapterMap = React.useMemo(() => {
+        return chapters.reduce((acc, chapter, index) => {
+            acc[chapter.id] = { chapter, index };
+            return acc;
+        }, {} as Record<string, { chapter: Chapter; index: number }>);
     }, [chapters]);
 
-    // Track changes for individual chapters
-    const handleChapterNotesChange = (index: number, notes: string) => {
-        const updatedChapters = [...localChapters];
-        updatedChapters[index] = { ...updatedChapters[index], notes };
-        setLocalChapters(updatedChapters);
+    // Clean up drafts when chapters are removed
+    useEffect(() => {
+        const currentIds = new Set(chapters.map(c => c.id));
+        setDrafts(prev => {
+            const cleaned = { ...prev };
+            Object.keys(cleaned).forEach(id => {
+                if (!currentIds.has(id)) {
+                    delete cleaned[id];
+                }
+            });
+            return cleaned;
+        });
+        setDirty(prev => {
+            const cleaned = { ...prev };
+            Object.keys(cleaned).forEach(id => {
+                if (!currentIds.has(id)) {
+                    delete cleaned[id];
+                }
+            });
+            return cleaned;
+        });
+    }, [chapters]);
 
-        setUnsavedChanges(prev => ({
-            ...prev,
-            [index]: notes !== chapters[index]?.notes
+    // Get display value (draft or persisted)
+    const getDisplayValue = (chapter: Chapter): string => {
+        return drafts[chapter.id] ?? chapter.notes;
+    };
+
+    // Track changes for individual chapters
+    const handleChapterNotesChange = (chapter: Chapter, notes: string) => {
+        setDrafts(prev => ({ ...prev, [chapter.id]: notes }));
+        setDirty(prev => ({ 
+            ...prev, 
+            [chapter.id]: notes !== chapter.notes 
         }));
     };
 
     // Save individual chapter
-    const handleSaveChapter = async (index: number) => {
-        if (!unsavedChanges[index]) return;
+    const handleSaveChapter = async (chapter: Chapter) => {
+        if (!dirty[chapter.id]) return;
 
-        setSavingStates(prev => ({ ...prev, [index]: true }));
-        setShowSavedStates(prev => ({ ...prev, [index]: false }));
+        const chapterInfo = chapterMap[chapter.id];
+        if (!chapterInfo) return;
+
+        setSavingStates(prev => ({ ...prev, [chapter.id]: true }));
+        setShowSavedStates(prev => ({ ...prev, [chapter.id]: false }));
+        
         try {
             // Ensure minimum 800ms for better UX perception
             await Promise.all([
-                onUpdateChapter(index, localChapters[index]),
+                onUpdateChapter(chapterInfo.index, { 
+                    ...chapter, 
+                    notes: drafts[chapter.id] 
+                }),
                 new Promise(resolve => setTimeout(resolve, 800))
             ]);
 
-            setUnsavedChanges(prev => ({ ...prev, [index]: false }));
-            setShowSavedStates(prev => ({ ...prev, [index]: true }));
+            // Clear draft and mark as clean
+            setDrafts(prev => {
+                const { [chapter.id]: _, ...rest } = prev;
+                return rest;
+            });
+            setDirty(prev => ({ ...prev, [chapter.id]: false }));
+            setShowSavedStates(prev => ({ ...prev, [chapter.id]: true }));
 
             // Hide the "saved" indicator after 2 seconds
             setTimeout(() => {
-                setShowSavedStates(prev => ({ ...prev, [index]: false }));
+                setShowSavedStates(prev => ({ ...prev, [chapter.id]: false }));
             }, 2000);
         } catch (error) {
             console.error('Failed to save chapter:', error);
         } finally {
-            setSavingStates(prev => ({ ...prev, [index]: false }));
+            setSavingStates(prev => ({ ...prev, [chapter.id]: false }));
         }
     };
+
+    // Save all dirty chapters
+    const handleSaveAll = async () => {
+        const dirtyIds = Object.keys(dirty).filter(id => dirty[id]);
+        if (dirtyIds.length === 0) return;
+
+        // Save them sequentially for better UX feedback
+        for (const id of dirtyIds) {
+            const chapterInfo = chapterMap[id];
+            if (chapterInfo) {
+                await handleSaveChapter(chapterInfo.chapter);
+            }
+        }
+    };
+
+    // Count dirty chapters for UI
+    const dirtyCount = Object.values(dirty).filter(Boolean).length;
 
     const handleAddChapter = () => {
         if (!newChapterName.trim()) return;
@@ -86,13 +150,29 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
     return (
         <div className="space-y-6">
             <div className="p-6 bg-gray-50 rounded-xl border border-gray-200">
-                <div className="flex items-center justify-between mb-6">
-                    <h4 className="text-lg font-semibold text-gray-900 flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                    <div className="flex items-center gap-3">
                         <div className="p-2 bg-green-100 rounded-lg">
                             <BookOpenIcon size={20} className="text-green-600" />
                         </div>
-                        Chapters ({chapters.length})
-                    </h4>
+                        <div>
+                            <h4 className="text-lg font-semibold text-gray-900">Chapters ({chapters.length})</h4>
+                            <SaveStatus isSaving={isSaving} lastSaved={lastSaved} error={saveError} className="mt-0.5" />
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {dirtyCount > 0 && (
+                            <Button
+                                onClick={handleSaveAll}
+                                variant="secondary"
+                                size="sm"
+                                className="bg-emerald-600 text-white hover:bg-emerald-700"
+                            >
+                                <SaveIcon size={14} />
+                                Save All ({dirtyCount})
+                            </Button>
+                        )}
+                    </div>
                 </div>
 
                 {/* Manual Add Chapter */}
@@ -119,10 +199,13 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
 
             <div className="space-y-4">
                 {chapters.map((chapter, index) => (
-                    <div key={index} className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
+                    <div key={chapter.id} className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
                         <div className="flex items-start gap-4">
-                            <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
+                            <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center relative">
                                 <BookOpenIcon size={24} className="text-green-600" />
+                                {dirty[chapter.id] && (
+                                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white"></div>
+                                )}
                             </div>
                             <div className="flex-1 space-y-4">
                                 <div className="flex justify-between items-center">
@@ -136,7 +219,7 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
                                     <div className="flex items-center gap-2">
                                         <Tooltip
                                             text="Generate an AI-powered summary of this chapter from your selected text"
-                                            id={`chapter-summary-${index}`}
+                                            id={`chapter-summary-${chapter.id}`}
                                         >
                                             <Button
                                                 onClick={() => onGenerateSummary(index)}
@@ -150,7 +233,7 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
                                         </Tooltip>
                                         <Tooltip
                                             text="Move this chapter up in the order"
-                                            id={`chapter-up-${index}`}
+                                            id={`chapter-up-${chapter.id}`}
                                         >
                                             <Button
                                                 onClick={() => onMoveChapter(index, 'up')}
@@ -163,7 +246,7 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
                                         </Tooltip>
                                         <Tooltip
                                             text="Move this chapter down in the order"
-                                            id={`chapter-down-${index}`}
+                                            id={`chapter-down-${chapter.id}`}
                                         >
                                             <Button
                                                 onClick={() => onMoveChapter(index, 'down')}
@@ -175,27 +258,27 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
                                             </Button>
                                         </Tooltip>
                                         <SaveStateIndicator
-                                            isSaving={savingStates[index] || false}
-                                            hasUnsavedChanges={unsavedChanges[index] || false}
-                                            showSaved={showSavedStates[index] || false}
+                                            isSaving={savingStates[chapter.id] || false}
+                                            hasUnsavedChanges={dirty[chapter.id] || false}
+                                            showSaved={showSavedStates[chapter.id] || false}
                                         />
                                         <button
-                                            onClick={() => handleSaveChapter(index)}
-                                            disabled={savingStates[index] || !unsavedChanges[index]}
-                                            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 ${savingStates[index]
-                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                    : unsavedChanges[index]
-                                                        ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
-                                                        : 'bg-emerald-100 text-emerald-700 cursor-default'
+                                            onClick={() => handleSaveChapter(chapter)}
+                                            disabled={savingStates[chapter.id] || !dirty[chapter.id]}
+                                            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 ${savingStates[chapter.id]
+                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                : dirty[chapter.id]
+                                                    ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
+                                                    : 'bg-emerald-100 text-emerald-700 cursor-default'
                                                 }`}
                                             title="Ctrl+Enter to save"
                                         >
                                             <SaveIcon size={14} />
-                                            {savingStates[index] ? 'Saving...' : 'Save'}
+                                            {savingStates[chapter.id] ? 'Saving...' : 'Save'}
                                         </button>
                                         <Tooltip
                                             text="Remove this chapter from your list"
-                                            id={`delete-chapter-${index}`}
+                                            id={`delete-chapter-${chapter.id}`}
                                         >
                                             <Button
                                                 onClick={() => onDeleteChapter(index)}
@@ -211,14 +294,14 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
                                 <div className="space-y-3">
                                     <label className="text-sm text-gray-600 font-medium">Chapter Notes</label>
                                     <ResizableTextArea
-                                        value={localChapters[index]?.notes || ''}
-                                        onChange={(notes) => handleChapterNotesChange(index, notes)}
-                                        onSave={() => handleSaveChapter(index)}
+                                        value={getDisplayValue(chapter)}
+                                        onChange={(notes) => handleChapterNotesChange(chapter, notes)}
+                                        onSave={() => handleSaveChapter(chapter)}
                                         placeholder="Chapter summary and notes..."
                                         minRows={3}
                                         maxRows={15}
                                     />
-                                    {unsavedChanges[index] && (
+                                    {dirty[chapter.id] && (
                                         <p className="text-xs text-gray-500">
                                             Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> or click Save to save your changes
                                         </p>

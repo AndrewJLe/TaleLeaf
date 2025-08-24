@@ -26,13 +26,17 @@ export const useBookActions = (
             await saveSections(book.id, newSections, book.window);
         } catch (error) {
             console.error('Failed to save sections:', error);
-            // TODO: Show toast notification for save errors
+            // Note: Errors are handled by individual save states in components
         }
     }, [book.sections, book.id, book.window, updateBook, saveSections]);
 
     // Character actions
-    const addCharacter = useCallback((character: Character) => {
-        const characters = [...book.sections.characters, character];
+    const addCharacter = useCallback((character: Omit<Character, 'id'>) => {
+        const newCharacter: Character = { 
+            ...character, 
+            id: crypto.randomUUID() 
+        };
+        const characters = [...book.sections.characters, newCharacter];
         updateSections({ characters });
     }, [book.sections.characters, updateSections]);
 
@@ -60,8 +64,12 @@ export const useBookActions = (
     }, [book.sections.characters, updateSections]);
 
     // Chapter actions
-    const addChapter = useCallback((chapter: Chapter) => {
-        const chapters = [...book.sections.chapters, chapter];
+    const addChapter = useCallback((chapter: Omit<Chapter, 'id'>) => {
+        const newChapter: Chapter = { 
+            ...chapter, 
+            id: crypto.randomUUID() 
+        };
+        const chapters = [...book.sections.chapters, newChapter];
         updateSections({ chapters });
     }, [book.sections.chapters, updateSections]);
 
@@ -89,8 +97,12 @@ export const useBookActions = (
     }, [book.sections.chapters, updateSections]);
 
     // Location actions
-    const addLocation = useCallback((location: Location) => {
-        const locations = [...book.sections.locations, location];
+    const addLocation = useCallback((location: Omit<Location, 'id'>) => {
+        const newLocation: Location = { 
+            ...location, 
+            id: crypto.randomUUID() 
+        };
+        const locations = [...book.sections.locations, newLocation];
         updateSections({ locations });
     }, [book.sections.locations, updateSections]);
 
@@ -118,8 +130,12 @@ export const useBookActions = (
     }, [book.sections.locations, updateSections]);
 
     // Notes actions
-    const addNote = useCallback((note: Note) => {
-        const notes = [...book.sections.notes, note];
+    const addNote = useCallback((note: Omit<Note, 'id'>) => {
+        const newNote: Note = { 
+            ...note, 
+            id: crypto.randomUUID() 
+        };
+        const notes = [...book.sections.notes, newNote];
         updateSections({ notes });
     }, [book.sections.notes, updateSections]);
 
@@ -154,7 +170,12 @@ export const useBookActions = (
 
             if (aiCharacters.length > 0) {
                 const existingCharacters = book.sections.characters;
-                const newCharacters = [...existingCharacters, ...aiCharacters];
+                // Add IDs to AI-generated characters
+                const charactersWithIds: Character[] = aiCharacters.map(char => ({
+                    ...char,
+                    id: crypto.randomUUID()
+                }));
+                const newCharacters = [...existingCharacters, ...charactersWithIds];
                 updateSections({ characters: newCharacters });
             }
         } catch (error) {
@@ -213,7 +234,12 @@ export const useBookActions = (
 
             if (aiLocations.length > 0) {
                 const existingLocations = book.sections.locations;
-                const newLocations = [...existingLocations, ...aiLocations];
+                // Add IDs to AI-generated locations
+                const locationsWithIds: Location[] = aiLocations.map(loc => ({
+                    ...loc,
+                    id: crypto.randomUUID()
+                }));
+                const newLocations = [...existingLocations, ...locationsWithIds];
                 updateSections({ locations: newLocations });
             }
         } catch (error) {
@@ -232,6 +258,7 @@ export const useBookActions = (
 
             // Create a new AI-generated note
             const aiNote: Note = {
+                id: crypto.randomUUID(),
                 name: 'AI Generated Notes',
                 notes: aiNotes
             };

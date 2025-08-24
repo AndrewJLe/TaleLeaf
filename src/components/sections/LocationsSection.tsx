@@ -4,16 +4,20 @@ import { Button } from '../ui/Button';
 import { ChevronDownIcon, ChevronUpIcon, MapPinIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
 import { SaveStateIndicator } from '../ui/SaveStateIndicator';
+import { SaveStatus } from '../ui/SaveStatus';
 import { Tooltip } from '../ui/Tooltip';
 
 interface LocationsSectionProps {
     locations: Location[];
-    onAddLocation: (location: Location) => void;
+    onAddLocation: (location: Omit<Location, 'id'>) => void;
     onUpdateLocation: (index: number, location: Location) => void;
     onDeleteLocation: (index: number) => void;
     onMoveLocation: (index: number, direction: 'up' | 'down') => void;
     onGenerateLocations: () => void;
     isGenerating: boolean;
+    isSaving?: boolean;
+    lastSaved?: Date | null;
+    saveError?: string | null;
 }
 
 export const LocationsSection: React.FC<LocationsSectionProps> = ({
@@ -23,59 +27,119 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
     onDeleteLocation,
     onMoveLocation,
     onGenerateLocations,
-    isGenerating
+    isGenerating,
+    isSaving = false,
+    lastSaved = null,
+    saveError = null
 }) => {
     const [newLocationName, setNewLocationName] = useState('');
-    const [localLocations, setLocalLocations] = useState<Location[]>(locations);
-    const [savingStates, setSavingStates] = useState<{ [key: number]: boolean }>({});
-    const [unsavedChanges, setUnsavedChanges] = useState<{ [key: number]: boolean }>({});
-    const [showSavedStates, setShowSavedStates] = useState<{ [key: number]: boolean }>({});
+    
+    // ID-based draft tracking
+    const [drafts, setDrafts] = useState<Record<string, string>>({});
+    const [dirty, setDirty] = useState<Record<string, boolean>>({});
+    const [savingStates, setSavingStates] = useState<Record<string, boolean>>({});
+    const [showSavedStates, setShowSavedStates] = useState<Record<string, boolean>>({});
 
-    // Sync with prop changes
-    useEffect(() => {
-        setLocalLocations(locations);
-        setUnsavedChanges({});
-        setShowSavedStates({});
+    // Create location lookup map for easy access
+    const locationMap = React.useMemo(() => {
+        return locations.reduce((acc, location, index) => {
+            acc[location.id] = { location, index };
+            return acc;
+        }, {} as Record<string, { location: Location; index: number }>);
     }, [locations]);
 
-    // Track changes for individual locations
-    const handleLocationNotesChange = (index: number, notes: string) => {
-        const updatedLocations = [...localLocations];
-        updatedLocations[index] = { ...updatedLocations[index], notes };
-        setLocalLocations(updatedLocations);
+    // Clean up drafts when locations are removed
+    useEffect(() => {
+        const currentIds = new Set(locations.map(l => l.id));
+        setDrafts(prev => {
+            const cleaned = { ...prev };
+            Object.keys(cleaned).forEach(id => {
+                if (!currentIds.has(id)) {
+                    delete cleaned[id];
+                }
+            });
+            return cleaned;
+        });
+        setDirty(prev => {
+            const cleaned = { ...prev };
+            Object.keys(cleaned).forEach(id => {
+                if (!currentIds.has(id)) {
+                    delete cleaned[id];
+                }
+            });
+            return cleaned;
+        });
+    }, [locations]);
 
-        setUnsavedChanges(prev => ({
-            ...prev,
-            [index]: notes !== locations[index]?.notes
+    // Get display value (draft or persisted)
+    const getDisplayValue = (location: Location): string => {
+        return drafts[location.id] ?? location.notes;
+    };
+
+    // Track changes for individual locations
+    const handleLocationNotesChange = (location: Location, notes: string) => {
+        setDrafts(prev => ({ ...prev, [location.id]: notes }));
+        setDirty(prev => ({ 
+            ...prev, 
+            [location.id]: notes !== location.notes 
         }));
     };
 
     // Save individual location
-    const handleSaveLocation = async (index: number) => {
-        if (!unsavedChanges[index]) return;
+    const handleSaveLocation = async (location: Location) => {
+        if (!dirty[location.id]) return;
 
-        setSavingStates(prev => ({ ...prev, [index]: true }));
-        setShowSavedStates(prev => ({ ...prev, [index]: false }));
+        const locationInfo = locationMap[location.id];
+        if (!locationInfo) return;
+
+        setSavingStates(prev => ({ ...prev, [location.id]: true }));
+        setShowSavedStates(prev => ({ ...prev, [location.id]: false }));
+        
         try {
             // Ensure minimum 800ms for better UX perception
             await Promise.all([
-                onUpdateLocation(index, localLocations[index]),
+                onUpdateLocation(locationInfo.index, { 
+                    ...location, 
+                    notes: drafts[location.id] 
+                }),
                 new Promise(resolve => setTimeout(resolve, 800))
             ]);
 
-            setUnsavedChanges(prev => ({ ...prev, [index]: false }));
-            setShowSavedStates(prev => ({ ...prev, [index]: true }));
+            // Clear draft and mark as clean
+            setDrafts(prev => {
+                const { [location.id]: _, ...rest } = prev;
+                return rest;
+            });
+            setDirty(prev => ({ ...prev, [location.id]: false }));
+            setShowSavedStates(prev => ({ ...prev, [location.id]: true }));
 
             // Hide the "saved" indicator after 2 seconds
             setTimeout(() => {
-                setShowSavedStates(prev => ({ ...prev, [index]: false }));
+                setShowSavedStates(prev => ({ ...prev, [location.id]: false }));
             }, 2000);
         } catch (error) {
             console.error('Failed to save location:', error);
         } finally {
-            setSavingStates(prev => ({ ...prev, [index]: false }));
+            setSavingStates(prev => ({ ...prev, [location.id]: false }));
         }
     };
+
+    // Save all dirty locations
+    const handleSaveAll = async () => {
+        const dirtyIds = Object.keys(dirty).filter(id => dirty[id]);
+        if (dirtyIds.length === 0) return;
+
+        // Save them sequentially for better UX feedback
+        for (const id of dirtyIds) {
+            const locationInfo = locationMap[id];
+            if (locationInfo) {
+                await handleSaveLocation(locationInfo.location);
+            }
+        }
+    };
+
+    // Count dirty locations for UI
+    const dirtyCount = Object.values(dirty).filter(Boolean).length;
 
     const handleAddLocation = () => {
         if (!newLocationName.trim()) return;
@@ -86,26 +150,42 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
     return (
         <div className="space-y-6">
             <div className="p-6 bg-gray-50 rounded-xl border border-gray-200">
-                <div className="flex items-center justify-between mb-6">
-                    <h4 className="text-lg font-semibold text-gray-900 flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                    <div className="flex items-center gap-3">
                         <div className="p-2 bg-purple-100 rounded-lg">
                             <MapPinIcon size={20} className="text-purple-600" />
                         </div>
-                        Locations ({locations.length})
-                    </h4>
-                    <Tooltip
-                        text="Use AI to automatically find and extract locations mentioned in your selected text"
-                        id="locations-ai-generate"
-                    >
-                        <Button
-                            onClick={onGenerateLocations}
-                            isLoading={isGenerating}
-                            variant="primary"
+                        <div>
+                            <h4 className="text-lg font-semibold text-gray-900">Locations ({locations.length})</h4>
+                            <SaveStatus isSaving={isSaving} lastSaved={lastSaved} error={saveError} className="mt-0.5" />
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {dirtyCount > 0 && (
+                            <Button
+                                onClick={handleSaveAll}
+                                variant="secondary"
+                                size="sm"
+                                className="bg-emerald-600 text-white hover:bg-emerald-700"
+                            >
+                                <SaveIcon size={14} />
+                                Save All ({dirtyCount})
+                            </Button>
+                        )}
+                        <Tooltip
+                            text="Use AI to automatically find and extract locations mentioned in your selected text"
+                            id="locations-ai-generate"
                         >
-                            <SparklesIcon size={16} />
-                            {isGenerating ? 'Generating...' : 'AI Generate'}
-                        </Button>
-                    </Tooltip>
+                            <Button
+                                onClick={onGenerateLocations}
+                                isLoading={isGenerating}
+                                variant="primary"
+                            >
+                                <SparklesIcon size={16} />
+                                {isGenerating ? 'Generating...' : 'AI Generate'}
+                            </Button>
+                        </Tooltip>
+                    </div>
                 </div>
 
                 {/* Manual Add Location */}
@@ -132,10 +212,13 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
 
             <div className="space-y-4">
                 {locations.map((location, index) => (
-                    <div key={index} className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
+                    <div key={location.id} className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
                         <div className="flex items-start gap-4">
-                            <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
+                            <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center relative">
                                 <MapPinIcon size={24} className="text-purple-600" />
+                                {dirty[location.id] && (
+                                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white"></div>
+                                )}
                             </div>
                             <div className="flex-1 space-y-4">
                                 <div className="flex justify-between items-center">
@@ -148,13 +231,13 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
                                     />
                                     <div className="flex items-center gap-2">
                                         <SaveStateIndicator
-                                            isSaving={savingStates[index] || false}
-                                            hasUnsavedChanges={unsavedChanges[index] || false}
-                                            showSaved={showSavedStates[index] || false}
+                                            isSaving={savingStates[location.id] || false}
+                                            hasUnsavedChanges={dirty[location.id] || false}
+                                            showSaved={showSavedStates[location.id] || false}
                                         />
                                         <Tooltip
                                             text="Move this location up in the order"
-                                            id={`location-up-${index}`}
+                                            id={`location-up-${location.id}`}
                                         >
                                             <Button
                                                 onClick={() => onMoveLocation(index, 'up')}
@@ -167,7 +250,7 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
                                         </Tooltip>
                                         <Tooltip
                                             text="Move this location down in the order"
-                                            id={`location-down-${index}`}
+                                            id={`location-down-${location.id}`}
                                         >
                                             <Button
                                                 onClick={() => onMoveLocation(index, 'down')}
@@ -179,22 +262,22 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
                                             </Button>
                                         </Tooltip>
                                         <button
-                                            onClick={() => handleSaveLocation(index)}
-                                            disabled={savingStates[index] || !unsavedChanges[index]}
-                                            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 ${savingStates[index]
+                                            onClick={() => handleSaveLocation(location)}
+                                            disabled={savingStates[location.id] || !dirty[location.id]}
+                                            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 ${savingStates[location.id]
                                                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                : unsavedChanges[index]
+                                                : dirty[location.id]
                                                     ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
                                                     : 'bg-emerald-100 text-emerald-700 cursor-default'
                                                 }`}
                                             title="Ctrl+Enter to save"
                                         >
                                             <SaveIcon size={14} />
-                                            {savingStates[index] ? 'Saving...' : 'Save'}
+                                            {savingStates[location.id] ? 'Saving...' : 'Save'}
                                         </button>
                                         <Tooltip
                                             text="Remove this location from your list"
-                                            id={`delete-location-${index}`}
+                                            id={`delete-location-${location.id}`}
                                         >
                                             <Button
                                                 onClick={() => onDeleteLocation(index)}
@@ -210,14 +293,14 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
                                 <div className="space-y-3">
                                     <label className="text-sm text-gray-600 font-medium">Location Description</label>
                                     <ResizableTextArea
-                                        value={localLocations[index]?.notes || ''}
-                                        onChange={(notes) => handleLocationNotesChange(index, notes)}
-                                        onSave={() => handleSaveLocation(index)}
+                                        value={getDisplayValue(location)}
+                                        onChange={(notes) => handleLocationNotesChange(location, notes)}
+                                        onSave={() => handleSaveLocation(location)}
                                         placeholder="Describe this location, its significance, atmosphere..."
                                         minRows={3}
                                         maxRows={15}
                                     />
-                                    {unsavedChanges[index] && (
+                                    {dirty[location.id] && (
                                         <p className="text-xs text-gray-500">
                                             Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> or click Save to save your changes
                                         </p>

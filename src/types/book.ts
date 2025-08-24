@@ -1,19 +1,23 @@
 export interface Character {
+    id: string;
     name: string;
     notes: string;
 }
 
 export interface Chapter {
+    id: string;
     name: string;
     notes: string;
 }
 
 export interface Location {
+    id: string;
     name: string;
     notes: string;
 }
 
 export interface Note {
+    id: string;
     name: string;
     notes: string;
 }
@@ -97,10 +101,6 @@ export interface AIGenerationState {
     notes: boolean;
 }
 
-export interface ExpandedFieldsState {
-    [fieldId: string]: boolean;
-}
-
 // Props interfaces
 export interface BookEditorProps {
     book: Book;
@@ -111,16 +111,4 @@ export interface TooltipProps {
     text: string;
     children: React.ReactNode;
     id: string;
-}
-
-export interface ExpandableTextAreaProps {
-    value: string;
-    onChange: (value: string) => void;
-    placeholder?: string;
-    fieldId: string;
-    label?: string;
-    isExpanded: boolean;
-    onToggleExpand: () => void;
-    rows?: number;
-    expandedRows?: number;
 }

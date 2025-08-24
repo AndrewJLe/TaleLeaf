@@ -4,16 +4,20 @@ import { Button } from '../ui/Button';
 import { ChevronDownIcon, ChevronUpIcon, NotebookIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
 import { SaveStateIndicator } from '../ui/SaveStateIndicator';
+import { SaveStatus } from '../ui/SaveStatus';
 import { Tooltip } from '../ui/Tooltip';
 
 interface NotesSectionProps {
     notes: Note[];
-    onAddNote: (note: Note) => void;
+    onAddNote: (note: Omit<Note, 'id'>) => void;
     onUpdateNote: (index: number, note: Note) => void;
     onDeleteNote: (index: number) => void;
     onMoveNote: (index: number, direction: 'up' | 'down') => void;
     onGenerateNotes: () => void;
     isGenerating: boolean;
+    isSaving?: boolean;
+    lastSaved?: Date | null;
+    saveError?: string | null;
 }
 
 export const NotesSection: React.FC<NotesSectionProps> = ({
@@ -23,59 +27,119 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
     onDeleteNote,
     onMoveNote,
     onGenerateNotes,
-    isGenerating
+    isGenerating,
+    isSaving = false,
+    lastSaved = null,
+    saveError = null
 }) => {
     const [newNoteName, setNewNoteName] = useState('');
-    const [localNotes, setLocalNotes] = useState<Note[]>(notes);
-    const [savingStates, setSavingStates] = useState<{ [key: number]: boolean }>({});
-    const [unsavedChanges, setUnsavedChanges] = useState<{ [key: number]: boolean }>({});
-    const [showSavedStates, setShowSavedStates] = useState<{ [key: number]: boolean }>({});
+    
+    // ID-based draft tracking
+    const [drafts, setDrafts] = useState<Record<string, string>>({});
+    const [dirty, setDirty] = useState<Record<string, boolean>>({});
+    const [savingStates, setSavingStates] = useState<Record<string, boolean>>({});
+    const [showSavedStates, setShowSavedStates] = useState<Record<string, boolean>>({});
 
-    // Sync with prop changes
-    useEffect(() => {
-        setLocalNotes(notes);
-        setUnsavedChanges({});
-        setShowSavedStates({});
+    // Create note lookup map for easy access
+    const noteMap = React.useMemo(() => {
+        return notes.reduce((acc, note, index) => {
+            acc[note.id] = { note, index };
+            return acc;
+        }, {} as Record<string, { note: Note; index: number }>);
     }, [notes]);
 
-    // Track changes for individual notes
-    const handleNoteContentChange = (index: number, content: string) => {
-        const updatedNotes = [...localNotes];
-        updatedNotes[index] = { ...updatedNotes[index], notes: content };
-        setLocalNotes(updatedNotes);
+    // Clean up drafts when notes are removed
+    useEffect(() => {
+        const currentIds = new Set(notes.map(n => n.id));
+        setDrafts(prev => {
+            const cleaned = { ...prev };
+            Object.keys(cleaned).forEach(id => {
+                if (!currentIds.has(id)) {
+                    delete cleaned[id];
+                }
+            });
+            return cleaned;
+        });
+        setDirty(prev => {
+            const cleaned = { ...prev };
+            Object.keys(cleaned).forEach(id => {
+                if (!currentIds.has(id)) {
+                    delete cleaned[id];
+                }
+            });
+            return cleaned;
+        });
+    }, [notes]);
 
-        setUnsavedChanges(prev => ({
-            ...prev,
-            [index]: content !== notes[index]?.notes
+    // Get display value (draft or persisted)
+    const getDisplayValue = (note: Note): string => {
+        return drafts[note.id] ?? note.notes;
+    };
+
+    // Track changes for individual notes
+    const handleNoteContentChange = (note: Note, content: string) => {
+        setDrafts(prev => ({ ...prev, [note.id]: content }));
+        setDirty(prev => ({ 
+            ...prev, 
+            [note.id]: content !== note.notes 
         }));
     };
 
     // Save individual note
-    const handleSaveNote = async (index: number) => {
-        if (!unsavedChanges[index]) return;
+    const handleSaveNote = async (note: Note) => {
+        if (!dirty[note.id]) return;
 
-        setSavingStates(prev => ({ ...prev, [index]: true }));
-        setShowSavedStates(prev => ({ ...prev, [index]: false }));
+        const noteInfo = noteMap[note.id];
+        if (!noteInfo) return;
+
+        setSavingStates(prev => ({ ...prev, [note.id]: true }));
+        setShowSavedStates(prev => ({ ...prev, [note.id]: false }));
+        
         try {
             // Ensure minimum 800ms for better UX perception
             await Promise.all([
-                onUpdateNote(index, localNotes[index]),
+                onUpdateNote(noteInfo.index, { 
+                    ...note, 
+                    notes: drafts[note.id] 
+                }),
                 new Promise(resolve => setTimeout(resolve, 800))
             ]);
 
-            setUnsavedChanges(prev => ({ ...prev, [index]: false }));
-            setShowSavedStates(prev => ({ ...prev, [index]: true }));
+            // Clear draft and mark as clean
+            setDrafts(prev => {
+                const { [note.id]: _, ...rest } = prev;
+                return rest;
+            });
+            setDirty(prev => ({ ...prev, [note.id]: false }));
+            setShowSavedStates(prev => ({ ...prev, [note.id]: true }));
 
             // Hide the "saved" indicator after 2 seconds
             setTimeout(() => {
-                setShowSavedStates(prev => ({ ...prev, [index]: false }));
+                setShowSavedStates(prev => ({ ...prev, [note.id]: false }));
             }, 2000);
         } catch (error) {
             console.error('Failed to save note:', error);
         } finally {
-            setSavingStates(prev => ({ ...prev, [index]: false }));
+            setSavingStates(prev => ({ ...prev, [note.id]: false }));
         }
     };
+
+    // Save all dirty notes
+    const handleSaveAll = async () => {
+        const dirtyIds = Object.keys(dirty).filter(id => dirty[id]);
+        if (dirtyIds.length === 0) return;
+
+        // Save them sequentially for better UX feedback
+        for (const id of dirtyIds) {
+            const noteInfo = noteMap[id];
+            if (noteInfo) {
+                await handleSaveNote(noteInfo.note);
+            }
+        }
+    };
+
+    // Count dirty notes for UI
+    const dirtyCount = Object.values(dirty).filter(Boolean).length;
 
     const handleAddNote = () => {
         if (!newNoteName.trim()) return;
@@ -90,22 +154,38 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
                         <div className="p-2 bg-orange-100 rounded-lg flex-shrink-0">
                             <NotebookIcon size={20} className="text-orange-600" />
                         </div>
-                        <h4 className="text-lg font-semibold text-gray-900">Notes ({notes.length})</h4>
+                        <div>
+                            <h4 className="text-lg font-semibold text-gray-900">Notes ({notes.length})</h4>
+                            <SaveStatus isSaving={isSaving} lastSaved={lastSaved} error={saveError} className="mt-0.5" />
+                        </div>
                     </div>
-                    <Tooltip
-                        text="Use AI to generate insightful notes and analysis from your selected text"
-                        id="notes-ai-generate"
-                    >
-                        <Button
-                            onClick={onGenerateNotes}
-                            isLoading={isGenerating}
-                            variant="primary"
-                            className="w-full sm:w-auto"
+                    <div className="flex items-center gap-3">
+                        {dirtyCount > 0 && (
+                            <Button
+                                onClick={handleSaveAll}
+                                variant="secondary"
+                                size="sm"
+                                className="bg-emerald-600 text-white hover:bg-emerald-700"
+                            >
+                                <SaveIcon size={14} />
+                                Save All ({dirtyCount})
+                            </Button>
+                        )}
+                        <Tooltip
+                            text="Use AI to generate insightful notes and analysis from your selected text"
+                            id="notes-ai-generate"
                         >
-                            <SparklesIcon size={16} />
-                            {isGenerating ? 'Generating...' : 'AI Generate'}
-                        </Button>
-                    </Tooltip>
+                            <Button
+                                onClick={onGenerateNotes}
+                                isLoading={isGenerating}
+                                variant="primary"
+                                className="w-full sm:w-auto"
+                            >
+                                <SparklesIcon size={16} />
+                                {isGenerating ? 'Generating...' : 'AI Generate'}
+                            </Button>
+                        </Tooltip>
+                    </div>
                 </div>
 
                 {/* Manual Add Note */}
@@ -132,11 +212,17 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
             </div>
 
             <div className="space-y-4">
-                {localNotes.map((note, index) => (
-                    <div key={index} className="p-4 sm:p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
+                {notes.map((note, index) => (
+                    <div key={note.id} className="p-4 sm:p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
                         <div className="space-y-4">
                             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                                <div className="flex-1">
+                                <div className="flex-1 flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center relative flex-shrink-0">
+                                        <NotebookIcon size={18} className="text-orange-600" />
+                                        {dirty[note.id] && (
+                                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white"></div>
+                                        )}
+                                    </div>
                                     <input
                                         type="text"
                                         value={note.name}
@@ -148,13 +234,13 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
 
                                 <div className="flex items-center gap-2">
                                     <SaveStateIndicator
-                                        isSaving={savingStates[index] || false}
-                                        hasUnsavedChanges={unsavedChanges[index] || false}
-                                        showSaved={showSavedStates[index] || false}
+                                        isSaving={savingStates[note.id] || false}
+                                        hasUnsavedChanges={dirty[note.id] || false}
+                                        showSaved={showSavedStates[note.id] || false}
                                     />
                                     <Tooltip
                                         text="Move this note up in the order"
-                                        id={`note-up-${index}`}
+                                        id={`note-up-${note.id}`}
                                     >
                                         <Button
                                             onClick={() => onMoveNote(index, 'up')}
@@ -167,7 +253,7 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
                                     </Tooltip>
                                     <Tooltip
                                         text="Move this note down in the order"
-                                        id={`note-down-${index}`}
+                                        id={`note-down-${note.id}`}
                                     >
                                         <Button
                                             onClick={() => onMoveNote(index, 'down')}
@@ -179,22 +265,22 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
                                         </Button>
                                     </Tooltip>
                                     <button
-                                        onClick={() => handleSaveNote(index)}
-                                        disabled={savingStates[index] || !unsavedChanges[index]}
-                                        className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 ${savingStates[index]
+                                        onClick={() => handleSaveNote(note)}
+                                        disabled={savingStates[note.id] || !dirty[note.id]}
+                                        className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 ${savingStates[note.id]
                                             ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                            : unsavedChanges[index]
+                                            : dirty[note.id]
                                                 ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
                                                 : 'bg-emerald-100 text-emerald-700 cursor-default'
                                             }`}
                                         title="Ctrl+Enter to save"
                                     >
                                         <SaveIcon size={14} />
-                                        {savingStates[index] ? 'Saving...' : 'Save'}
+                                        {savingStates[note.id] ? 'Saving...' : 'Save'}
                                     </button>
                                     <Tooltip
                                         text="Remove this note from your list"
-                                        id={`delete-note-${index}`}
+                                        id={`delete-note-${note.id}`}
                                     >
                                         <Button
                                             onClick={() => onDeleteNote(index)}
@@ -211,14 +297,14 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
                             <div className="space-y-2">
                                 <label className="text-sm text-gray-600 font-medium">Note Content</label>
                                 <ResizableTextArea
-                                    value={localNotes[index]?.notes || ''}
-                                    onChange={(content) => handleNoteContentChange(index, content)}
-                                    onSave={() => handleSaveNote(index)}
+                                    value={getDisplayValue(note)}
+                                    onChange={(content) => handleNoteContentChange(note, content)}
+                                    onSave={() => handleSaveNote(note)}
                                     placeholder="Write your note content here..."
                                     minRows={3}
                                     maxRows={15}
                                 />
-                                {unsavedChanges[index] && (
+                                {dirty[note.id] && (
                                     <p className="text-xs text-gray-500">
                                         Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> or click Save to save your changes
                                     </p>
