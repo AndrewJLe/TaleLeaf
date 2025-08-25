@@ -505,14 +505,16 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
 
                                         {/* Add Tag button moved inline after the last tag */}
                                         {addingTagFor !== character.id && (
-                                            <button
-                                                onClick={() => { setAddingTagFor(character.id); setTimeout(() => inputRefs.current[character.id]?.focus(), 0); }}
-                                                className="inline-flex items-center justify-center rounded-full px-2 py-0.5 bg-emerald-200/40 text-emerald-500 text-sm border border-white/20 hover:bg-emerald-200/80 hover:scale-105 transition-all shadow-sm"
-                                                aria-label="Add tag"
-                                            >
-                                                <span className="text-sm">+</span>
-                                                <span aria-hidden className="ml-1 text-xs">🏷️</span>
-                                            </button>
+                                            <Tooltip text="Add tag" id={`add-tag-${character.id}`}>
+                                                <button
+                                                    onClick={() => { setAddingTagFor(character.id); setTimeout(() => inputRefs.current[character.id]?.focus(), 0); }}
+                                                    className="inline-flex items-center justify-center rounded-full px-2 py-0.5 bg-emerald-200/40 text-emerald-500 text-sm border border-white/20 hover:bg-emerald-200/80 hover:scale-105 transition-all shadow-sm"
+                                                    aria-label="Add tag"
+                                                >
+                                                    <span className="text-sm">+</span>
+                                                    <span aria-hidden className="ml-1 text-xs">🏷️</span>
+                                                </button>
+                                            </Tooltip>
                                         )}
                                     </div>
 
