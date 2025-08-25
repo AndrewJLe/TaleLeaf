@@ -39,7 +39,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         if (typeof migratedBook.sections.notes === 'string') {
             const oldNotes = migratedBook.sections.notes;
             migratedBook.sections.notes = oldNotes
-                ? [{ id: crypto.randomUUID(), name: 'General Notes', notes: oldNotes }]
+                ? [{ id: crypto.randomUUID(), name: 'General Notes', notes: oldNotes, tags: [] }]
                 : [];
         }
 

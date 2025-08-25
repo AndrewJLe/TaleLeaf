@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Chapter } from '../../types/book';
 import { Button } from '../ui/Button';
-import { BookOpenIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon, UndoIcon } from '../ui/Icons';
+import { BookOpenIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon, SaveIcon, SparklesIcon, TagIcon, TrashIcon, UndoIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
 import { SaveStateIndicator } from '../ui/SaveStateIndicator';
 import { SaveStatus } from '../ui/SaveStatus';
@@ -93,6 +93,20 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
             ...prev,
             [chapter.id]: notes !== chapter.notes
         }));
+    };
+
+    // Handle tags update
+    const handleUpdateTags = (index: number, chapter: Chapter, tagsText: string) => {
+        // Parse comma-separated tags, clean up whitespace, dedupe case-insensitive
+        const tags = tagsText
+            .split(',')
+            .map(tag => tag.trim())
+            .filter(tag => tag.length > 0)
+            .filter((tag, idx, arr) =>
+                arr.findIndex(t => t.toLowerCase() === tag.toLowerCase()) === idx
+            );
+
+        onUpdateChapter(index, { ...chapter, tags });
     };
 
     // Save individual chapter
@@ -239,7 +253,7 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
 
     const handleAddChapter = () => {
         if (!newChapterName.trim()) return;
-        onAddChapter({ name: newChapterName.trim(), notes: '' });
+        onAddChapter({ name: newChapterName.trim(), notes: '', tags: [] });
         setNewChapterName('');
     };
 
@@ -434,6 +448,40 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
                                         </Button>
                                     </Tooltip>
                                 </div>
+                            </div>
+
+                            {/* Tags Section */}
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <TagIcon size={16} className="text-gray-400" />
+                                    <input
+                                        type="text"
+                                        value={chapter.tags?.join(', ') || ''}
+                                        onChange={(e) => handleUpdateTags(index, chapter, e.target.value)}
+                                        onKeyPress={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleUpdateTags(index, chapter, e.currentTarget.value);
+                                            }
+                                        }}
+                                        placeholder="Tags (comma-separated)..."
+                                        className="text-sm text-gray-600 bg-transparent border border-gray-200 rounded-md px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent flex-1"
+                                    />
+                                </div>
+
+                                {/* Tag chips display */}
+                                {chapter.tags && chapter.tags.length > 0 && (
+                                    <div className="flex flex-wrap gap-1">
+                                        {chapter.tags.map((tag, tagIndex) => (
+                                            <span
+                                                key={tagIndex}
+                                                className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full"
+                                            >
+                                                {tag}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="space-y-3">

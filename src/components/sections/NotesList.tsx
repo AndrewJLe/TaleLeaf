@@ -207,6 +207,12 @@ export const NotesList: React.FC<NotesListProps> = ({
                         type="text"
                         value={note.tags.join(', ')}
                         onChange={(e) => handleUpdateTags(note.id, e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleUpdateTags(note.id, e.currentTarget.value);
+                          }
+                        }}
                         placeholder="Tags (comma-separated)..."
                         className="text-sm text-gray-600 bg-transparent border border-gray-200 rounded-md px-2 py-1 focus:ring-2 focus:ring-orange-500 focus:border-transparent flex-1"
                       />

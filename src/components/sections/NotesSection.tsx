@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Note } from '../../types/book';
 import { Button } from '../ui/Button';
-import { ChevronDownIcon, ChevronUpIcon, NotebookIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon, UndoIcon } from '../ui/Icons';
+import { ChevronDownIcon, ChevronUpIcon, NotebookIcon, PlusIcon, SaveIcon, SparklesIcon, TagIcon, TrashIcon, UndoIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
 import { SaveStateIndicator } from '../ui/SaveStateIndicator';
 import { SaveStatus } from '../ui/SaveStatus';
@@ -93,6 +93,20 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
             ...prev,
             [note.id]: content !== note.notes
         }));
+    };
+
+    // Handle tags update
+    const handleUpdateTags = (index: number, note: Note, tagsText: string) => {
+        // Parse comma-separated tags, clean up whitespace, dedupe case-insensitive
+        const tags = tagsText
+            .split(',')
+            .map(tag => tag.trim())
+            .filter(tag => tag.length > 0)
+            .filter((tag, idx, arr) =>
+                arr.findIndex(t => t.toLowerCase() === tag.toLowerCase()) === idx
+            );
+
+        onUpdateNote(index, { ...note, tags });
     };
 
     // Save individual note
@@ -249,7 +263,7 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
 
     const handleAddNote = () => {
         if (!newNoteName.trim()) return;
-        onAddNote({ name: newNoteName.trim(), notes: '' });
+        onAddNote({ name: newNoteName.trim(), notes: '', tags: [] });
         setNewNoteName('');
     };
     return (
@@ -437,6 +451,40 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
                                         </Button>
                                     </Tooltip>
                                 </div>
+                            </div>
+
+                            {/* Tags Section */}
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <TagIcon size={16} className="text-gray-400" />
+                                    <input
+                                        type="text"
+                                        value={note.tags?.join(', ') || ''}
+                                        onChange={(e) => handleUpdateTags(index, note, e.target.value)}
+                                        onKeyPress={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleUpdateTags(index, note, e.currentTarget.value);
+                                            }
+                                        }}
+                                        placeholder="Tags (comma-separated)..."
+                                        className="text-sm text-gray-600 bg-transparent border border-gray-200 rounded-md px-2 py-1 focus:ring-2 focus:ring-orange-500 focus:border-transparent flex-1"
+                                    />
+                                </div>
+
+                                {/* Tag chips display */}
+                                {note.tags && note.tags.length > 0 && (
+                                    <div className="flex flex-wrap gap-1">
+                                        {note.tags.map((tag, tagIndex) => (
+                                            <span
+                                                key={tagIndex}
+                                                className="inline-block bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded-full"
+                                            >
+                                                {tag}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="space-y-2">

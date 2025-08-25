@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Character } from '../../types/book';
 import { Button } from '../ui/Button';
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon, UndoIcon, UsersIcon } from '../ui/Icons';
@@ -52,6 +52,83 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
     // Local state for inline name editing
     const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
     const [editingName, setEditingName] = useState<Record<string, boolean>>({});
+
+    // Tags + color picker state (Characters tab only)
+    const [newTagDrafts, setNewTagDrafts] = useState<Record<string, string>>({});
+    const [newTagColorDrafts, setNewTagColorDrafts] = useState<Record<string, string>>({});
+    const [tagColorOverrides, setTagColorOverrides] = useState<Record<string, string>>({});
+    const [swatchOpenFor, setSwatchOpenFor] = useState<string | null>(null);
+    const [addingTagFor, setAddingTagFor] = useState<string | null>(null);
+    const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+    // Deterministic palette and helpers
+    const TAG_PALETTE = [
+        '#F97316', // orange
+        '#EF4444', // red
+        '#10B981', // emerald
+        '#3B82F6', // blue
+        '#8B5CF6', // violet
+        '#F59E0B', // amber
+        '#06B6D4', // teal
+        '#EC4899', // pink
+        '#6366F1', // indigo
+        '#84CC16'  // lime
+    ];
+
+    const hashString = (s: string) => {
+        let h = 0;
+        for (let i = 0; i < s.length; i++) {
+            h = (h << 5) - h + s.charCodeAt(i);
+            h |= 0;
+        }
+        return Math.abs(h);
+    };
+
+    const colorForTagName = (tag: string) => {
+        if (tagColorOverrides[tag]) return tagColorOverrides[tag];
+        const idx = hashString(tag) % TAG_PALETTE.length;
+        return TAG_PALETTE[idx];
+    };
+
+    const luminance = (hex: string) => {
+        const c = hex.replace('#', '');
+        const r = parseInt(c.substring(0, 2), 16) / 255;
+        const g = parseInt(c.substring(2, 4), 16) / 255;
+        const b = parseInt(c.substring(4, 6), 16) / 255;
+        const a = [r, g, b].map(v => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+        return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
+    };
+
+    const readableTextColor = (bgHex: string) => {
+        return luminance(bgHex) > 0.5 ? '#111827' : '#ffffff';
+    };
+
+    const isValidTag = (t: string) => /^[a-z0-9]+$/.test(t);
+
+    const handleCreateTag = (character: Character, index: number) => {
+        const id = character.id;
+        const raw = (newTagDrafts[id] || '').trim().toLowerCase();
+        if (!raw) return;
+        if (!isValidTag(raw)) return; // silent fail for now
+        if (character.tags?.includes(raw)) {
+            setNewTagDrafts(prev => ({ ...prev, [id]: '' }));
+            return;
+        }
+        const color = newTagColorDrafts[id] || colorForTagName(raw);
+        const updated = { ...character, tags: [...(character.tags || []), raw] };
+        onUpdateCharacter(index, updated);
+        setTagColorOverrides(prev => ({ ...prev, [raw]: color }));
+        setNewTagDrafts(prev => ({ ...prev, [id]: '' }));
+        setNewTagColorDrafts(prev => ({ ...prev, [id]: '' }));
+        setSwatchOpenFor(null);
+        // keep focus on input if present
+        setTimeout(() => inputRefs.current[id]?.focus(), 0);
+    };
+
+    const handleRemoveTag = (character: Character, index: number, tag: string) => {
+        const updated = { ...character, tags: (character.tags || []).filter(t => t !== tag) };
+        onUpdateCharacter(index, updated);
+    };
 
     // Create character lookup map for easy access
     const characterMap = React.useMemo(() => {
@@ -242,7 +319,7 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
 
     const handleAddCharacter = () => {
         if (!newCharacterName.trim()) return;
-        onAddCharacter({ name: newCharacterName.trim(), notes: '' });
+        onAddCharacter({ name: newCharacterName.trim(), notes: '', tags: [] });
         setNewCharacterName('');
     };
 
@@ -397,6 +474,111 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                                 </div>
                             </div>
 
+                            {/* Tags (moved under name) */}
+                            <div className="mt-2 basis-full">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {(character.tags || []).map(tag => (
+                                            <div key={tag} className="group inline-flex items-center rounded-full px-2 py-0.5 text-xs sm:text-sm font-medium transform transition-transform hover:scale-105" style={{ backgroundColor: colorForTagName(tag), color: readableTextColor(colorForTagName(tag)) }}>
+                                                <span className="truncate max-w-[10rem]">{tag}</span>
+                                                <button
+                                                    aria-label={`Remove tag ${tag}`}
+                                                    onClick={() => handleRemoveTag(character, index, tag)}
+                                                    className="ml-2 text-red-600 font-semibold text-xs sm:text-sm opacity-0 group-hover:opacity-100 focus:opacity-100 focus:outline-none"
+                                                >
+                                                    ×
+                                                </button>
+                                            </div>
+                                        ))}
+
+                                        {/* Add Tag button moved inline after the last tag */}
+                                        {addingTagFor !== character.id && (
+                                            <button
+                                                onClick={() => { setAddingTagFor(character.id); setTimeout(() => inputRefs.current[character.id]?.focus(), 0); }}
+                                                className="px-2 py-1 rounded-md bg-emerald-600 text-white text-sm flex items-center gap-1 hover:bg-emerald-700 shadow-sm transition-all"
+                                                aria-label="Add tag"
+                                            >
+                                                <span className="font-semibold">+</span>
+                                                <span aria-hidden className="text-sm">🏷️</span>
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        {addingTagFor === character.id && (
+                                            <button
+                                                onClick={() => { setAddingTagFor(null); setNewTagDrafts(prev => ({ ...prev, [character.id]: '' })); setNewTagColorDrafts(prev => ({ ...prev, [character.id]: '' })); }}
+                                                className="px-3 py-1 rounded-md bg-gray-50 border border-gray-200 text-sm text-gray-600 hover:bg-gray-100 hover:shadow-sm transition-all"
+                                            >
+                                                Cancel
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {addingTagFor === character.id && (
+                                    <div className="mt-2 flex flex-col gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                ref={(el) => { inputRefs.current[character.id] = el; }}
+                                                value={newTagDrafts[character.id] ?? ''}
+                                                onChange={(e) => {
+                                                    const sanitized = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                                    setNewTagDrafts(prev => ({ ...prev, [character.id]: sanitized }));
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        const raw = (newTagDrafts[character.id] || '').trim().toLowerCase();
+                                                        if (isValidTag(raw)) {
+                                                            e.preventDefault();
+                                                            handleCreateTag(character, index);
+                                                        }
+                                                    } else if (e.key === 'Escape') {
+                                                        setAddingTagFor(null);
+                                                    }
+                                                }}
+                                                placeholder="add tag (lowercase alphanumeric)"
+                                                className="px-3 py-2 sm:py-1 border border-gray-200 rounded-lg bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 transition-colors duration-150 w-full sm:w-auto"
+                                            />
+                                            <button
+                                                type="button"
+                                                onMouseDown={(e) => e.preventDefault()}
+                                                onClick={() => setSwatchOpenFor(swatchOpenFor === character.id ? null : character.id)}
+                                                className="px-2 sm:px-3 py-2 sm:py-1 bg-white border border-gray-200 rounded-lg shadow-sm text-sm hover:scale-105 transition-transform flex items-center gap-1"
+                                                title="Pick tag color"
+                                            >
+                                                <span className="text-lg">🎨</span>
+                                                <span className="hidden sm:inline text-xs text-gray-600">Color</span>
+                                            </button>
+                                            <button
+                                                onClick={() => handleCreateTag(character, index)}
+                                                disabled={!isValidTag((newTagDrafts[character.id] || '').trim().toLowerCase())}
+                                                className={`px-3 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors ${isValidTag((newTagDrafts[character.id] || '').trim().toLowerCase()) ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                                            >
+                                                Create
+                                            </button>
+                                        </div>
+
+                                        {swatchOpenFor === character.id && (
+                                            <div className="w-full">
+                                                <div className="flex items-center gap-2 flex-wrap mt-1">
+                                                    {TAG_PALETTE.map(col => (
+                                                        <button
+                                                            key={col}
+                                                            onMouseDown={(e) => e.preventDefault()}
+                                                            onClick={() => setNewTagColorDrafts(prev => ({ ...prev, [character.id]: col }))}
+                                                            className={`w-5 h-5 rounded-full transform transition-transform hover:scale-110 focus:scale-110 outline-none ${newTagColorDrafts[character.id] === col ? 'ring-4 ring-emerald-200' : 'ring-2 ring-transparent'}`}
+                                                            style={{ backgroundColor: col }}
+                                                            aria-label={`Select ${col}`}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
                             {/* Actions Row - Responsive Layout */}
                             <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                                 {/* Primary Actions - Save and Status */}
@@ -507,6 +689,7 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                                     </p>
                                 )}
                             </div>
+
                         </div>
 
                         {/* Sheen overlay: thin diagonal light line moving across the card */}

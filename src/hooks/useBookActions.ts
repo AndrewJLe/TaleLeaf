@@ -189,7 +189,8 @@ export const useBookActions = (
                 // Add IDs to AI-generated characters
                 const charactersWithIds: Character[] = aiCharacters.map(char => ({
                     ...char,
-                    id: crypto.randomUUID()
+                    id: crypto.randomUUID(),
+                    tags: []
                 }));
                 const newCharacters = [...existingCharacters, ...charactersWithIds];
                 updateSections({ characters: newCharacters });
@@ -253,7 +254,8 @@ export const useBookActions = (
                 // Add IDs to AI-generated locations
                 const locationsWithIds: Location[] = aiLocations.map(loc => ({
                     ...loc,
-                    id: crypto.randomUUID()
+                    id: crypto.randomUUID(),
+                    tags: []
                 }));
                 const newLocations = [...existingLocations, ...locationsWithIds];
                 updateSections({ locations: newLocations });
@@ -276,7 +278,8 @@ export const useBookActions = (
             const aiNote: Note = {
                 id: crypto.randomUUID(),
                 name: 'AI Generated Notes',
-                notes: aiNotes
+                notes: aiNotes,
+                tags: []
             };
 
             addNote(aiNote);

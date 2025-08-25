@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState, useLayoutEffect } from 'react';
-import { TooltipProps } from '../../types/book';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { TooltipProps } from '../../types/book';
 
 export const Tooltip: React.FC<TooltipProps> = ({ text, children, id }) => {
     const [isVisible, setIsVisible] = useState(false);

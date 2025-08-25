@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Location } from '../../types/book';
 import { Button } from '../ui/Button';
-import { ChevronDownIcon, ChevronUpIcon, MapPinIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon, UndoIcon } from '../ui/Icons';
+import { ChevronDownIcon, ChevronUpIcon, MapPinIcon, PlusIcon, SaveIcon, SparklesIcon, TagIcon, TrashIcon, UndoIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
 import { SaveStateIndicator } from '../ui/SaveStateIndicator';
 import { SaveStatus } from '../ui/SaveStatus';
@@ -93,6 +93,20 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
             ...prev,
             [location.id]: notes !== location.notes
         }));
+    };
+
+    // Handle tags update
+    const handleUpdateTags = (index: number, location: Location, tagsText: string) => {
+        // Parse comma-separated tags, clean up whitespace, dedupe case-insensitive
+        const tags = tagsText
+            .split(',')
+            .map(tag => tag.trim())
+            .filter(tag => tag.length > 0)
+            .filter((tag, idx, arr) =>
+                arr.findIndex(t => t.toLowerCase() === tag.toLowerCase()) === idx
+            );
+
+        onUpdateLocation(index, { ...location, tags });
     };
 
     // Save individual location
@@ -239,7 +253,7 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
 
     const handleAddLocation = () => {
         if (!newLocationName.trim()) return;
-        onAddLocation({ name: newLocationName.trim(), notes: '' });
+        onAddLocation({ name: newLocationName.trim(), notes: '', tags: [] });
         setNewLocationName('');
     };
 
@@ -429,6 +443,40 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
                                         </Button>
                                     </Tooltip>
                                 </div>
+                            </div>
+
+                            {/* Tags Section */}
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <TagIcon size={16} className="text-gray-400" />
+                                    <input
+                                        type="text"
+                                        value={location.tags?.join(', ') || ''}
+                                        onChange={(e) => handleUpdateTags(index, location, e.target.value)}
+                                        onKeyPress={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleUpdateTags(index, location, e.currentTarget.value);
+                                            }
+                                        }}
+                                        placeholder="Tags (comma-separated)..."
+                                        className="text-sm text-gray-600 bg-transparent border border-gray-200 rounded-md px-2 py-1 focus:ring-2 focus:ring-green-500 focus:border-transparent flex-1"
+                                    />
+                                </div>
+
+                                {/* Tag chips display */}
+                                {location.tags && location.tags.length > 0 && (
+                                    <div className="flex flex-wrap gap-1">
+                                        {location.tags.map((tag, tagIndex) => (
+                                            <span
+                                                key={tagIndex}
+                                                className="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"
+                                            >
+                                                {tag}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="space-y-3">

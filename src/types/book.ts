@@ -2,24 +2,28 @@ export interface Character {
     id: string;
     name: string;
     notes: string;
+    tags: string[];
 }
 
 export interface Chapter {
     id: string;
     name: string;
     notes: string;
+    tags: string[];
 }
 
 export interface Location {
     id: string;
     name: string;
     notes: string;
+    tags: string[];
 }
 
 export interface Note {
     id: string;
     name: string;
     notes: string;
+    tags: string[];
 }
 
 // TODO N1: Multi-note normalized model
