@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BookNote } from '../../types/book';
 import { Button } from '../ui/Button';
-import { EyeIcon, EyeOffIcon, NotebookIcon, PlusIcon, TagIcon, TrashIcon } from '../ui/Icons';
+import { EyeIcon, EyeOffIcon, NotebookIcon, PlusIcon, SaveIcon, TagIcon, TrashIcon, UndoIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
 import { Tooltip } from '../ui/Tooltip';
 
@@ -14,6 +14,13 @@ interface NotesListProps {
   onReorderNotes: (noteIds: string[]) => Promise<void>;
   isLoading: boolean;
   error: string | null;
+  // New draft management props
+  onUpdateDraft?: (id: string, updates: Partial<BookNote>) => void;
+  onCancelNote?: (id: string) => void;
+  onSaveNote?: (id: string) => Promise<void>;
+  onSaveAllNotes?: () => Promise<void>;
+  dirtyNoteIds?: string[];
+  hasUnsavedChanges?: boolean;
 }
 
 export const NotesList: React.FC<NotesListProps> = ({
@@ -24,7 +31,14 @@ export const NotesList: React.FC<NotesListProps> = ({
   onDeleteNote,
   onReorderNotes,
   isLoading,
-  error
+  error,
+  // New draft management props
+  onUpdateDraft,
+  onCancelNote,
+  onSaveNote,
+  onSaveAllNotes,
+  dirtyNoteIds = [],
+  hasUnsavedChanges = false
 }) => {
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
 
@@ -63,7 +77,19 @@ export const NotesList: React.FC<NotesListProps> = ({
         arr.findIndex(t => t.toLowerCase() === tag.toLowerCase()) === index
       );
 
-    await onUpdateNote(noteId, { tags });
+    if (onUpdateDraft) {
+      onUpdateDraft(noteId, { tags });
+    } else {
+      await onUpdateNote(noteId, { tags });
+    }
+  };
+
+  const handleUpdateNote = (noteId: string, updates: Partial<BookNote>) => {
+    if (onUpdateDraft) {
+      onUpdateDraft(noteId, updates);
+    } else {
+      onUpdateNote(noteId, updates);
+    }
   };
 
   const isNoteVisible = (note: BookNote): boolean => {
@@ -106,17 +132,37 @@ export const NotesList: React.FC<NotesListProps> = ({
               <NotebookIcon size={20} className="text-orange-600" />
             </div>
             Notes ({notes.length})
+            {hasUnsavedChanges && (
+              <span className="text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
+                {dirtyNoteIds.length} unsaved
+              </span>
+            )}
           </h4>
-          <Tooltip text="Add a new note" id="add-note-button">
-            <Button
-              onClick={handleAddNote}
-              variant="primary"
-              disabled={isLoading}
-            >
-              <PlusIcon size={16} />
-              Add Note
-            </Button>
-          </Tooltip>
+          <div className="flex gap-2">
+            {hasUnsavedChanges && onSaveAllNotes && (
+              <Tooltip text="Save all changes" id="save-all-notes">
+                <Button
+                  onClick={onSaveAllNotes}
+                  variant="primary"
+                  disabled={isLoading}
+                  size="sm"
+                >
+                  <SaveIcon size={16} />
+                  Save All
+                </Button>
+              </Tooltip>
+            )}
+            <Tooltip text="Add a new note" id="add-note-button">
+              <Button
+                onClick={handleAddNote}
+                variant="primary"
+                disabled={isLoading}
+              >
+                <PlusIcon size={16} />
+                Add Note
+              </Button>
+            </Tooltip>
+          </div>
         </div>
 
         {notes.length === 0 && (
@@ -149,7 +195,7 @@ export const NotesList: React.FC<NotesListProps> = ({
                     <input
                       type="text"
                       value={note.title || ''}
-                      onChange={(e) => onUpdateNote(note.id, { title: e.target.value })}
+                      onChange={(e) => handleUpdateNote(note.id, { title: e.target.value })}
                       placeholder="Note title..."
                       className="font-semibold text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-orange-500 rounded-lg px-3 py-1 -mx-3 w-full"
                     />
@@ -182,13 +228,43 @@ export const NotesList: React.FC<NotesListProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2 ml-4">
+                    {/* Save/Cancel for dirty notes */}
+                    {dirtyNoteIds.includes(note.id) && (
+                      <>
+                        {onSaveNote && (
+                          <Tooltip text="Save changes" id={`save-note-${note.id}`}>
+                            <Button
+                              onClick={() => onSaveNote(note.id)}
+                              variant="primary"
+                              size="sm"
+                              className="p-2"
+                            >
+                              <SaveIcon size={16} />
+                            </Button>
+                          </Tooltip>
+                        )}
+                        {onCancelNote && (
+                          <Tooltip text="Cancel changes" id={`cancel-note-${note.id}`}>
+                            <Button
+                              onClick={() => onCancelNote(note.id)}
+                              variant="secondary"
+                              size="sm"
+                              className="p-2"
+                            >
+                              <UndoIcon size={16} />
+                            </Button>
+                          </Tooltip>
+                        )}
+                      </>
+                    )}
+
                     {/* Spoiler Protection Toggle */}
                     <Tooltip
                       text={note.spoilerProtected ? "Remove spoiler protection" : "Protect from spoilers"}
                       id={`spoiler-toggle-${note.id}`}
                     >
                       <Button
-                        onClick={() => onUpdateNote(note.id, { spoilerProtected: !note.spoilerProtected })}
+                        onClick={() => handleUpdateNote(note.id, { spoilerProtected: !note.spoilerProtected })}
                         variant="secondary"
                         size="sm"
                         className={`p-2 ${note.spoilerProtected ? 'bg-yellow-100 text-yellow-700' : 'text-gray-400'}`}
@@ -223,7 +299,7 @@ export const NotesList: React.FC<NotesListProps> = ({
                       <input
                         type="number"
                         value={note.minVisiblePage || ''}
-                        onChange={(e) => onUpdateNote(note.id, {
+                        onChange={(e) => handleUpdateNote(note.id, {
                           minVisiblePage: e.target.value ? parseInt(e.target.value) : undefined
                         })}
                         placeholder="Page number"
@@ -249,7 +325,7 @@ export const NotesList: React.FC<NotesListProps> = ({
 
                   <ResizableTextArea
                     value={note.body}
-                    onChange={(value) => onUpdateNote(note.id, { body: value })}
+                    onChange={(value) => handleUpdateNote(note.id, { body: value })}
                     placeholder="Write your note here..."
                     minRows={isExpanded ? 6 : 3}
                     maxRows={isExpanded ? 20 : 8}

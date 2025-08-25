@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Chapter } from '../../types/book';
 import { Button } from '../ui/Button';
-import { BookOpenIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon } from '../ui/Icons';
+import { BookOpenIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon, UndoIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
 import { SaveStateIndicator } from '../ui/SaveStateIndicator';
 import { SaveStatus } from '../ui/SaveStatus';
@@ -11,6 +11,7 @@ interface ChaptersSectionProps {
     chapters: Chapter[];
     onAddChapter: (chapter: Omit<Chapter, 'id'>) => void;
     onUpdateChapter: (index: number, chapter: Chapter) => void;
+    onBatchUpdateChapters?: (chapters: Chapter[]) => Promise<void>;
     onDeleteChapter: (index: number) => void;
     onMoveChapter: (index: number, direction: 'up' | 'down') => void;
     onGenerateSummary: (index: number) => void;
@@ -18,19 +19,28 @@ interface ChaptersSectionProps {
     isSaving?: boolean;
     lastSaved?: Date | null;
     saveError?: string | null;
+    // Expose unsaved changes state for external components
+    onUnsavedChangesUpdate?: (hasChanges: boolean, count: number) => void;
+    // Expose save/discard functions for external triggers
+    onSaveAllRef?: React.MutableRefObject<(() => Promise<void>) | null>;
+    onDiscardAllRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
     chapters,
     onAddChapter,
     onUpdateChapter,
+    onBatchUpdateChapters,
     onDeleteChapter,
     onMoveChapter,
     onGenerateSummary,
     isGenerating,
     isSaving = false,
     lastSaved = null,
-    saveError = null
+    saveError = null,
+    onUnsavedChangesUpdate,
+    onSaveAllRef,
+    onDiscardAllRef
 }) => {
     const [newChapterName, setNewChapterName] = useState('');
 
@@ -129,17 +139,103 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
         const dirtyIds = Object.keys(dirty).filter(id => dirty[id]);
         if (dirtyIds.length === 0) return;
 
-        // Save them sequentially for better UX feedback
-        for (const id of dirtyIds) {
-            const chapterInfo = chapterMap[id];
-            if (chapterInfo) {
-                await handleSaveChapter(chapterInfo.chapter);
+        // Set all dirty chapters to saving state
+        setSavingStates(prev => {
+            const newStates = { ...prev };
+            dirtyIds.forEach(id => { newStates[id] = true; });
+            return newStates;
+        });
+
+        try {
+            if (onBatchUpdateChapters) {
+                // Use the batch update method - this prevents race conditions
+                const updatedChapters = chapters.map(chapter =>
+                    dirty[chapter.id] ? { ...chapter, notes: drafts[chapter.id] } : chapter
+                );
+
+                await onBatchUpdateChapters(updatedChapters);
+            } else {
+                // Fallback to sequential individual updates with delays
+                for (let i = 0; i < dirtyIds.length; i++) {
+                    const id = dirtyIds[i];
+                    const chapterInfo = chapterMap[id];
+                    if (chapterInfo && drafts[id] !== undefined) {
+                        await onUpdateChapter(chapterInfo.index, {
+                            ...chapterInfo.chapter,
+                            notes: drafts[id]
+                        });
+
+                        // Add delay between saves to prevent race conditions
+                        if (i < dirtyIds.length - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 200));
+                        }
+                    }
+                }
             }
+
+            // Wait a bit for save to complete
+            await new Promise(resolve => setTimeout(resolve, 800));
+
+            // Clear all drafts and mark as clean
+            setDrafts(prev => {
+                const newDrafts = { ...prev };
+                dirtyIds.forEach(id => { delete newDrafts[id]; });
+                return newDrafts;
+            });
+            setDirty(prev => {
+                const newDirty = { ...prev };
+                dirtyIds.forEach(id => { newDirty[id] = false; });
+                return newDirty;
+            });
+            setShowSavedStates(prev => {
+                const newStates = { ...prev };
+                dirtyIds.forEach(id => { newStates[id] = true; });
+                return newStates;
+            });
+
+            // Hide saved indicators after 2 seconds
+            setTimeout(() => {
+                setShowSavedStates(prev => {
+                    const newStates = { ...prev };
+                    dirtyIds.forEach(id => { newStates[id] = false; });
+                    return newStates;
+                });
+            }, 2000);
+
+        } catch (error) {
+            console.error('Failed to save chapters:', error);
+        } finally {
+            setSavingStates(prev => {
+                const newStates = { ...prev };
+                dirtyIds.forEach(id => { newStates[id] = false; });
+                return newStates;
+            });
         }
+    };
+
+    // Discard all changes
+    const handleDiscardAll = () => {
+        setDrafts({});
+        setDirty({});
     };
 
     // Count dirty chapters for UI
     const dirtyCount = Object.values(dirty).filter(Boolean).length;
+
+    // Notify parent component about unsaved changes
+    useEffect(() => {
+        onUnsavedChangesUpdate?.(dirtyCount > 0, dirtyCount);
+    }, [dirtyCount, onUnsavedChangesUpdate]);
+
+    // Expose functions to parent via refs
+    useEffect(() => {
+        if (onSaveAllRef) {
+            onSaveAllRef.current = handleSaveAll;
+        }
+        if (onDiscardAllRef) {
+            onDiscardAllRef.current = handleDiscardAll;
+        }
+    });
 
     const handleAddChapter = () => {
         if (!newChapterName.trim()) return;
@@ -162,15 +258,26 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
                     </div>
                     <div className="flex items-center gap-3">
                         {dirtyCount > 0 && (
-                            <Button
-                                onClick={handleSaveAll}
-                                variant="secondary"
-                                size="sm"
-                                className="bg-emerald-600 text-white hover:bg-emerald-700"
-                            >
-                                <SaveIcon size={14} />
-                                Save All ({dirtyCount})
-                            </Button>
+                            <>
+                                <Button
+                                    onClick={handleSaveAll}
+                                    variant="secondary"
+                                    size="sm"
+                                    className="bg-emerald-600 text-white hover:bg-emerald-700"
+                                >
+                                    <SaveIcon size={14} />
+                                    Save All ({dirtyCount})
+                                </Button>
+                                <Button
+                                    onClick={handleDiscardAll}
+                                    variant="secondary"
+                                    size="sm"
+                                    className="bg-gray-600 text-white hover:bg-gray-700"
+                                >
+                                    <UndoIcon size={14} />
+                                    Discard All
+                                </Button>
+                            </>
                         )}
                     </div>
                 </div>

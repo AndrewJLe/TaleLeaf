@@ -3,7 +3,7 @@
 import type { Session } from '@supabase/supabase-js';
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { featureFlags } from "../constants/featureFlags";
 import { useAIGeneration } from "../hooks/useAIGeneration";
 import { useBookActions } from "../hooks/useBookActions";
@@ -78,6 +78,39 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     const [showRateLimits, setShowRateLimits] = useState(false);
     const [tab, setTab] = useState<TabType>('characters');
     const [currentDocumentPage, setCurrentDocumentPage] = useState(1);
+
+    // Legacy notes unsaved changes state
+    const [legacyNotesHasUnsaved, setLegacyNotesHasUnsaved] = useState(false);
+    const [legacyNotesUnsavedCount, setLegacyNotesUnsavedCount] = useState(0);
+    const legacyNotesSaveAllRef = useRef<(() => Promise<void>) | null>(null);
+    const legacyNotesDiscardAllRef = useRef<(() => void) | null>(null);
+
+    // All tabs unsaved changes state
+    const [charactersUnsaved, setCharactersUnsaved] = useState({ hasChanges: false, count: 0 });
+    const [chaptersUnsaved, setChaptersUnsaved] = useState({ hasChanges: false, count: 0 });
+    const [locationsUnsaved, setLocationsUnsaved] = useState({ hasChanges: false, count: 0 });
+    const [notesUnsaved, setNotesUnsaved] = useState({ hasChanges: false, count: 0 });
+
+    // Refs for save/discard functions for each tab
+    const charactersSaveAllRef = useRef<(() => Promise<void>) | null>(null);
+    const charactersDiscardAllRef = useRef<(() => void) | null>(null);
+    const chaptersSaveAllRef = useRef<(() => Promise<void>) | null>(null);
+    const chaptersDiscardAllRef = useRef<(() => void) | null>(null);
+    const locationsSaveAllRef = useRef<(() => Promise<void>) | null>(null);
+    const locationsDiscardAllRef = useRef<(() => void) | null>(null);
+
+    // Stable callback functions for legacy notes
+    const handleLegacySaveAll = useCallback(async () => {
+        if (legacyNotesSaveAllRef.current) {
+            await legacyNotesSaveAllRef.current();
+        }
+    }, []);
+
+    const handleLegacyDiscardAll = useCallback(() => {
+        if (legacyNotesDiscardAllRef.current) {
+            legacyNotesDiscardAllRef.current();
+        }
+    }, []);
     const [tokenConfirm, setTokenConfirm] = useState<{
         isOpen: boolean;
         estimate: TokenEstimate | null;
@@ -107,8 +140,79 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         addNote,
         updateNote,
         deleteNote,
-        reorderNotes
+        reorderNotes,
+        // Draft state management
+        updateDraft,
+        cancelNote,
+        saveNote,
+        saveAllNotes,
+        discardAllChanges,
+        dirtyNoteIds,
+        hasUnsavedChanges
     } = useBookNotes(local.id, featureFlags.notesV2);
+
+    // Save/discard functions for all tabs
+    const handleTabSaveChanges = useCallback(async (tabType: TabType) => {
+        switch (tabType) {
+            case 'characters':
+                if (charactersSaveAllRef.current) {
+                    await charactersSaveAllRef.current();
+                }
+                break;
+            case 'chapters':
+                if (chaptersSaveAllRef.current) {
+                    await chaptersSaveAllRef.current();
+                }
+                break;
+            case 'locations':
+                if (locationsSaveAllRef.current) {
+                    await locationsSaveAllRef.current();
+                }
+                break;
+            case 'notes':
+                if (featureFlags.notesV2) {
+                    // Use new notes system
+                    await saveAllNotes();
+                } else {
+                    // Use legacy notes system
+                    if (legacyNotesSaveAllRef.current) {
+                        await legacyNotesSaveAllRef.current();
+                    }
+                }
+                break;
+        }
+    }, [featureFlags.notesV2, saveAllNotes]);
+
+    const handleTabDiscardChanges = useCallback((tabType: TabType) => {
+        switch (tabType) {
+            case 'characters':
+                if (charactersDiscardAllRef.current) {
+                    charactersDiscardAllRef.current();
+                }
+                break;
+            case 'chapters':
+                if (chaptersDiscardAllRef.current) {
+                    chaptersDiscardAllRef.current();
+                }
+                break;
+            case 'locations':
+                if (locationsDiscardAllRef.current) {
+                    locationsDiscardAllRef.current();
+                }
+                break;
+            case 'notes':
+                if (featureFlags.notesV2) {
+                    // Use new notes system
+                    discardAllChanges();
+                } else {
+                    // Use legacy notes system
+                    if (legacyNotesDiscardAllRef.current) {
+                        legacyNotesDiscardAllRef.current();
+                    }
+                }
+                break;
+        }
+    }, [featureFlags.notesV2, discardAllChanges]);
 
     // Database persistence
     const {
@@ -123,22 +227,26 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     const {
         addCharacter,
         updateCharacter,
+        batchUpdateCharacters,
         deleteCharacter,
         moveCharacter,
         enhanceCharacter,
         generateCharacters,
         addChapter,
         updateChapter,
+        batchUpdateChapters,
         deleteChapter,
         moveChapter,
         generateChapterSummary,
         addLocation,
         updateLocation,
+        batchUpdateLocations,
         deleteLocation,
         moveLocation,
         generateLocations,
         addNote: addBookNote,
         updateNote: updateBookNote,
+        batchUpdateNotes,
         deleteNote: deleteBookNote,
         moveNote,
         generateNotes,
@@ -432,9 +540,20 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
 
                             {/* Main Content */}
                             <div className="rounded-xl border border-gray-200 p-6 bg-white shadow-lg">
-                                <TabNavigation activeTab={tab} onTabChange={setTab} />
-
-                                <div className="mt-6">
+                                <TabNavigation
+                                    activeTab={tab}
+                                    onTabChange={setTab}
+                                    unsavedChanges={{
+                                        characters: charactersUnsaved,
+                                        chapters: chaptersUnsaved,
+                                        locations: locationsUnsaved,
+                                        notes: featureFlags.notesV2
+                                            ? { hasChanges: hasUnsavedChanges, count: dirtyNoteIds.length }
+                                            : { hasChanges: legacyNotesHasUnsaved, count: legacyNotesUnsavedCount }
+                                    }}
+                                    onSaveChanges={handleTabSaveChanges}
+                                    onDiscardChanges={handleTabDiscardChanges}
+                                />                                <div className="mt-6">
                                     {tab === 'characters' && (
                                         <CharactersSection
                                             characters={local.sections.characters}
@@ -444,9 +563,13 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                             onMoveCharacter={moveCharacter}
                                             onGenerateCharacters={() => confirmAIAction(
                                                 'generate characters',
-                                                'Analyze the provided text and identify all characters mentioned',
+                                                'Analyze the provided text and identified all characters mentioned',
                                                 generateCharacters
                                             )}
+                                            onBatchUpdateCharacters={batchUpdateCharacters}
+                                            onUnsavedChangesUpdate={(hasChanges, count) => setCharactersUnsaved({ hasChanges, count })}
+                                            onSaveAllRef={charactersSaveAllRef}
+                                            onDiscardAllRef={charactersDiscardAllRef}
                                             isGenerating={aiGenerationState.characters}
                                             isSaving={isPersisting}
                                             lastSaved={lastSaved}
@@ -466,6 +589,10 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                 'Create a concise chapter summary for the provided text',
                                                 () => generateChapterSummary(chapterIndex)
                                             )}
+                                            onBatchUpdateChapters={batchUpdateChapters}
+                                            onUnsavedChangesUpdate={(hasChanges, count) => setChaptersUnsaved({ hasChanges, count })}
+                                            onSaveAllRef={chaptersSaveAllRef}
+                                            onDiscardAllRef={chaptersDiscardAllRef}
                                             isGenerating={aiGenerationState.chapters}
                                             isSaving={isPersisting}
                                             lastSaved={lastSaved}
@@ -485,6 +612,10 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                 'Analyze the provided text and identify all locations, places, and settings mentioned',
                                                 generateLocations
                                             )}
+                                            onBatchUpdateLocations={batchUpdateLocations}
+                                            onUnsavedChangesUpdate={(hasChanges, count) => setLocationsUnsaved({ hasChanges, count })}
+                                            onSaveAllRef={locationsSaveAllRef}
+                                            onDiscardAllRef={locationsDiscardAllRef}
                                             isGenerating={aiGenerationState.locations}
                                             isSaving={isPersisting}
                                             lastSaved={lastSaved}
@@ -509,12 +640,20 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                     onReorderNotes={reorderNotes}
                                                     isLoading={notesLoading}
                                                     error={notesError}
+                                                    // Draft management
+                                                    onUpdateDraft={updateDraft}
+                                                    onCancelNote={cancelNote}
+                                                    onSaveNote={saveNote}
+                                                    onSaveAllNotes={saveAllNotes}
+                                                    dirtyNoteIds={dirtyNoteIds}
+                                                    hasUnsavedChanges={hasUnsavedChanges}
                                                 />
                                             ) : (
                                                 <NotesSection
                                                     notes={local.sections.notes}
                                                     onAddNote={addBookNote}
                                                     onUpdateNote={updateBookNote}
+                                                    onBatchUpdateNotes={batchUpdateNotes}
                                                     onDeleteNote={deleteBookNote}
                                                     onMoveNote={moveNote}
                                                     onGenerateNotes={() => confirmAIAction(
@@ -526,6 +665,9 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                     isSaving={isPersisting}
                                                     lastSaved={lastSaved}
                                                     saveError={persistError}
+                                                    onUnsavedChangesUpdate={(hasChanges, count) => setNotesUnsaved({ hasChanges, count })}
+                                                    onSaveAllRef={legacyNotesSaveAllRef}
+                                                    onDiscardAllRef={legacyNotesDiscardAllRef}
                                                 />
                                             )}
                                         </>

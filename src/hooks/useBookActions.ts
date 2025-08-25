@@ -46,6 +46,10 @@ export const useBookActions = (
         updateSections({ characters });
     }, [book.sections.characters, updateSections]);
 
+    const batchUpdateCharacters = useCallback(async (updatedCharacters: Character[]) => {
+        updateSections({ characters: updatedCharacters });
+    }, [updateSections]);
+
     const deleteCharacter = useCallback((index: number) => {
         const characters = [...book.sections.characters];
         characters.splice(index, 1);
@@ -78,6 +82,10 @@ export const useBookActions = (
         chapters[index] = chapter;
         updateSections({ chapters });
     }, [book.sections.chapters, updateSections]);
+
+    const batchUpdateChapters = useCallback(async (updatedChapters: Chapter[]) => {
+        updateSections({ chapters: updatedChapters });
+    }, [updateSections]);
 
     const deleteChapter = useCallback((index: number) => {
         const chapters = [...book.sections.chapters];
@@ -112,6 +120,10 @@ export const useBookActions = (
         updateSections({ locations });
     }, [book.sections.locations, updateSections]);
 
+    const batchUpdateLocations = useCallback(async (updatedLocations: Location[]) => {
+        updateSections({ locations: updatedLocations });
+    }, [updateSections]);
+
     const deleteLocation = useCallback((index: number) => {
         const locations = [...book.sections.locations];
         locations.splice(index, 1);
@@ -144,6 +156,10 @@ export const useBookActions = (
         notes[index] = note;
         updateSections({ notes });
     }, [book.sections.notes, updateSections]);
+
+    const batchUpdateNotes = useCallback(async (updatedNotes: Note[]) => {
+        updateSections({ notes: updatedNotes });
+    }, [updateSections]);
 
     const deleteNote = useCallback((index: number) => {
         const notes = [...book.sections.notes];
@@ -276,6 +292,7 @@ export const useBookActions = (
         // Character actions
         addCharacter,
         updateCharacter,
+        batchUpdateCharacters,
         deleteCharacter,
         moveCharacter,
         enhanceCharacter,
@@ -284,6 +301,7 @@ export const useBookActions = (
         // Chapter actions
         addChapter,
         updateChapter,
+        batchUpdateChapters,
         deleteChapter,
         moveChapter,
         generateChapterSummary,
@@ -291,6 +309,7 @@ export const useBookActions = (
         // Location actions
         addLocation,
         updateLocation,
+        batchUpdateLocations,
         deleteLocation,
         moveLocation,
         generateLocations,
@@ -298,6 +317,7 @@ export const useBookActions = (
         // Notes actions
         addNote,
         updateNote,
+        batchUpdateNotes,
         deleteNote,
         moveNote,
         generateNotes,

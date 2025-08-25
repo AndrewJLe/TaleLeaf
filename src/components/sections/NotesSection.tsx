@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Note } from '../../types/book';
 import { Button } from '../ui/Button';
-import { ChevronDownIcon, ChevronUpIcon, NotebookIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon } from '../ui/Icons';
+import { ChevronDownIcon, ChevronUpIcon, NotebookIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon, UndoIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
 import { SaveStateIndicator } from '../ui/SaveStateIndicator';
 import { SaveStatus } from '../ui/SaveStatus';
@@ -11,6 +11,7 @@ interface NotesSectionProps {
     notes: Note[];
     onAddNote: (note: Omit<Note, 'id'>) => void;
     onUpdateNote: (index: number, note: Note) => void;
+    onBatchUpdateNotes?: (notes: Note[]) => Promise<void>;
     onDeleteNote: (index: number) => void;
     onMoveNote: (index: number, direction: 'up' | 'down') => void;
     onGenerateNotes: () => void;
@@ -18,19 +19,28 @@ interface NotesSectionProps {
     isSaving?: boolean;
     lastSaved?: Date | null;
     saveError?: string | null;
+    // Expose unsaved changes state for external components
+    onUnsavedChangesUpdate?: (hasChanges: boolean, count: number) => void;
+    // Expose save/discard functions for external triggers
+    onSaveAllRef?: React.MutableRefObject<(() => Promise<void>) | null>;
+    onDiscardAllRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 export const NotesSection: React.FC<NotesSectionProps> = ({
     notes,
     onAddNote,
     onUpdateNote,
+    onBatchUpdateNotes,
     onDeleteNote,
     onMoveNote,
     onGenerateNotes,
     isGenerating,
     isSaving = false,
     lastSaved = null,
-    saveError = null
+    saveError = null,
+    onUnsavedChangesUpdate,
+    onSaveAllRef,
+    onDiscardAllRef
 }) => {
     const [newNoteName, setNewNoteName] = useState('');
 
@@ -129,17 +139,113 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
         const dirtyIds = Object.keys(dirty).filter(id => dirty[id]);
         if (dirtyIds.length === 0) return;
 
-        // Save them sequentially for better UX feedback
-        for (const id of dirtyIds) {
-            const noteInfo = noteMap[id];
-            if (noteInfo) {
-                await handleSaveNote(noteInfo.note);
+        // Set all dirty notes to saving state
+        setSavingStates(prev => {
+            const newStates = { ...prev };
+            dirtyIds.forEach(id => { newStates[id] = true; });
+            return newStates;
+        });
+
+        try {
+            if (onBatchUpdateNotes) {
+                // Use the batch update method - this prevents race conditions
+                const updatedNotes = notes.map(note =>
+                    dirty[note.id] ? { ...note, notes: drafts[note.id] } : note
+                );
+
+                await onBatchUpdateNotes(updatedNotes);
+            } else {
+                // Fallback to sequential individual updates with delays
+                for (let i = 0; i < dirtyIds.length; i++) {
+                    const id = dirtyIds[i];
+                    const noteIndex = notes.findIndex(note => note.id === id);
+
+                    if (noteIndex !== -1 && drafts[id] !== undefined) {
+                        await onUpdateNote(noteIndex, {
+                            ...notes[noteIndex],
+                            notes: drafts[id]
+                        });
+
+                        // Add delay between saves to prevent race conditions
+                        if (i < dirtyIds.length - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 200));
+                        }
+                    }
+                }
             }
+
+            // Wait a bit for save to complete
+            await new Promise(resolve => setTimeout(resolve, 800));
+
+            // Clear all drafts and mark as clean
+            setDrafts(prev => {
+                const newDrafts = { ...prev };
+                dirtyIds.forEach(id => { delete newDrafts[id]; });
+                return newDrafts;
+            });
+            setDirty(prev => {
+                const newDirty = { ...prev };
+                dirtyIds.forEach(id => { newDirty[id] = false; });
+                return newDirty;
+            });
+            setShowSavedStates(prev => {
+                const newStates = { ...prev };
+                dirtyIds.forEach(id => { newStates[id] = true; });
+                return newStates;
+            });
+
+            // Hide saved indicators after 2 seconds
+            setTimeout(() => {
+                setShowSavedStates(prev => {
+                    const newStates = { ...prev };
+                    dirtyIds.forEach(id => { newStates[id] = false; });
+                    return newStates;
+                });
+            }, 2000);
+
+        } catch (error) {
+            console.error('Failed to save notes:', error);
+        } finally {
+            setSavingStates(prev => {
+                const newStates = { ...prev };
+                dirtyIds.forEach(id => { newStates[id] = false; });
+                return newStates;
+            });
         }
+    };
+
+    // Cancel individual note changes
+    const handleCancelNote = (note: Note) => {
+        setDrafts(prev => {
+            const { [note.id]: _, ...rest } = prev;
+            return rest;
+        });
+        setDirty(prev => ({ ...prev, [note.id]: false }));
+    };
+
+    // Discard all changes
+    const handleDiscardAll = () => {
+        setDrafts({});
+        setDirty({});
     };
 
     // Count dirty notes for UI
     const dirtyCount = Object.values(dirty).filter(Boolean).length;
+
+    // Notify parent component about unsaved changes
+    useEffect(() => {
+        onUnsavedChangesUpdate?.(dirtyCount > 0, dirtyCount);
+    }, [dirtyCount, onUnsavedChangesUpdate]);
+
+    // Expose functions to parent via refs
+    useEffect(() => {
+        if (onSaveAllRef) {
+            onSaveAllRef.current = handleSaveAll;
+        }
+        if (onDiscardAllRef) {
+            onDiscardAllRef.current = handleDiscardAll;
+        }
+    });
 
     const handleAddNote = () => {
         if (!newNoteName.trim()) return;
@@ -161,15 +267,26 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
                     </div>
                     <div className="flex items-center gap-3">
                         {dirtyCount > 0 && (
-                            <Button
-                                onClick={handleSaveAll}
-                                variant="secondary"
-                                size="sm"
-                                className="bg-emerald-600 text-white hover:bg-emerald-700"
-                            >
-                                <SaveIcon size={14} />
-                                Save All ({dirtyCount})
-                            </Button>
+                            <>
+                                <Button
+                                    onClick={handleSaveAll}
+                                    variant="secondary"
+                                    size="sm"
+                                    className="bg-emerald-600 text-white hover:bg-emerald-700"
+                                >
+                                    <SaveIcon size={14} />
+                                    Save All ({dirtyCount})
+                                </Button>
+                                <Button
+                                    onClick={handleDiscardAll}
+                                    variant="secondary"
+                                    size="sm"
+                                    className="bg-gray-600 text-white hover:bg-gray-700"
+                                >
+                                    <UndoIcon size={14} />
+                                    Discard All
+                                </Button>
+                            </>
                         )}
                         <Tooltip
                             text="Use AI to generate insightful notes and analysis from your selected text"
@@ -234,7 +351,7 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
 
                             {/* Actions Row - Responsive Layout */}
                             <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-                                {/* Primary Actions - Save and Status */}
+                                {/* Primary Actions - Save, Cancel and Status */}
                                 <div className="flex items-center gap-2 order-2 sm:order-1">
                                     <button
                                         onClick={() => handleSaveNote(note)}
@@ -252,6 +369,19 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
                                             {savingStates[note.id] ? 'Saving...' : 'Save'}
                                         </span>
                                     </button>
+
+                                    {dirty[note.id] && (
+                                        <Tooltip text="Cancel changes and revert to saved version" id={`cancel-note-${note.id}`}>
+                                            <button
+                                                onClick={() => handleCancelNote(note)}
+                                                className="px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                            >
+                                                <UndoIcon size={14} />
+                                                <span className="hidden sm:inline">Cancel</span>
+                                            </button>
+                                        </Tooltip>
+                                    )}
+
                                     <SaveStateIndicator
                                         isSaving={savingStates[note.id] || false}
                                         hasUnsavedChanges={dirty[note.id] || false}

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Location } from '../../types/book';
 import { Button } from '../ui/Button';
-import { ChevronDownIcon, ChevronUpIcon, MapPinIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon } from '../ui/Icons';
+import { ChevronDownIcon, ChevronUpIcon, MapPinIcon, PlusIcon, SaveIcon, SparklesIcon, TrashIcon, UndoIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
 import { SaveStateIndicator } from '../ui/SaveStateIndicator';
 import { SaveStatus } from '../ui/SaveStatus';
@@ -11,6 +11,7 @@ interface LocationsSectionProps {
     locations: Location[];
     onAddLocation: (location: Omit<Location, 'id'>) => void;
     onUpdateLocation: (index: number, location: Location) => void;
+    onBatchUpdateLocations?: (locations: Location[]) => Promise<void>;
     onDeleteLocation: (index: number) => void;
     onMoveLocation: (index: number, direction: 'up' | 'down') => void;
     onGenerateLocations: () => void;
@@ -18,19 +19,28 @@ interface LocationsSectionProps {
     isSaving?: boolean;
     lastSaved?: Date | null;
     saveError?: string | null;
+    // Expose unsaved changes state for external components
+    onUnsavedChangesUpdate?: (hasChanges: boolean, count: number) => void;
+    // Expose save/discard functions for external triggers
+    onSaveAllRef?: React.MutableRefObject<(() => Promise<void>) | null>;
+    onDiscardAllRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 export const LocationsSection: React.FC<LocationsSectionProps> = ({
     locations,
     onAddLocation,
     onUpdateLocation,
+    onBatchUpdateLocations,
     onDeleteLocation,
     onMoveLocation,
     onGenerateLocations,
     isGenerating,
     isSaving = false,
     lastSaved = null,
-    saveError = null
+    saveError = null,
+    onUnsavedChangesUpdate,
+    onSaveAllRef,
+    onDiscardAllRef
 }) => {
     const [newLocationName, setNewLocationName] = useState('');
 
@@ -129,17 +139,103 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
         const dirtyIds = Object.keys(dirty).filter(id => dirty[id]);
         if (dirtyIds.length === 0) return;
 
-        // Save them sequentially for better UX feedback
-        for (const id of dirtyIds) {
-            const locationInfo = locationMap[id];
-            if (locationInfo) {
-                await handleSaveLocation(locationInfo.location);
+        // Set all dirty locations to saving state
+        setSavingStates(prev => {
+            const newStates = { ...prev };
+            dirtyIds.forEach(id => { newStates[id] = true; });
+            return newStates;
+        });
+
+        try {
+            if (onBatchUpdateLocations) {
+                // Use the batch update method - this prevents race conditions
+                const updatedLocations = locations.map(location =>
+                    dirty[location.id] ? { ...location, notes: drafts[location.id] } : location
+                );
+
+                await onBatchUpdateLocations(updatedLocations);
+            } else {
+                // Fallback to sequential individual updates with delays
+                for (let i = 0; i < dirtyIds.length; i++) {
+                    const id = dirtyIds[i];
+                    const locationInfo = locationMap[id];
+                    if (locationInfo && drafts[id] !== undefined) {
+                        await onUpdateLocation(locationInfo.index, {
+                            ...locationInfo.location,
+                            notes: drafts[id]
+                        });
+
+                        // Add delay between saves to prevent race conditions
+                        if (i < dirtyIds.length - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 200));
+                        }
+                    }
+                }
             }
+
+            // Wait a bit for save to complete
+            await new Promise(resolve => setTimeout(resolve, 800));
+
+            // Clear all drafts and mark as clean
+            setDrafts(prev => {
+                const newDrafts = { ...prev };
+                dirtyIds.forEach(id => { delete newDrafts[id]; });
+                return newDrafts;
+            });
+            setDirty(prev => {
+                const newDirty = { ...prev };
+                dirtyIds.forEach(id => { newDirty[id] = false; });
+                return newDirty;
+            });
+            setShowSavedStates(prev => {
+                const newStates = { ...prev };
+                dirtyIds.forEach(id => { newStates[id] = true; });
+                return newStates;
+            });
+
+            // Hide saved indicators after 2 seconds
+            setTimeout(() => {
+                setShowSavedStates(prev => {
+                    const newStates = { ...prev };
+                    dirtyIds.forEach(id => { newStates[id] = false; });
+                    return newStates;
+                });
+            }, 2000);
+
+        } catch (error) {
+            console.error('Failed to save locations:', error);
+        } finally {
+            setSavingStates(prev => {
+                const newStates = { ...prev };
+                dirtyIds.forEach(id => { newStates[id] = false; });
+                return newStates;
+            });
         }
+    };
+
+    // Discard all changes
+    const handleDiscardAll = () => {
+        setDrafts({});
+        setDirty({});
     };
 
     // Count dirty locations for UI
     const dirtyCount = Object.values(dirty).filter(Boolean).length;
+
+    // Notify parent component about unsaved changes
+    useEffect(() => {
+        onUnsavedChangesUpdate?.(dirtyCount > 0, dirtyCount);
+    }, [dirtyCount, onUnsavedChangesUpdate]);
+
+    // Expose functions to parent via refs
+    useEffect(() => {
+        if (onSaveAllRef) {
+            onSaveAllRef.current = handleSaveAll;
+        }
+        if (onDiscardAllRef) {
+            onDiscardAllRef.current = handleDiscardAll;
+        }
+    });
 
     const handleAddLocation = () => {
         if (!newLocationName.trim()) return;
@@ -162,15 +258,26 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
                     </div>
                     <div className="flex items-center gap-3">
                         {dirtyCount > 0 && (
-                            <Button
-                                onClick={handleSaveAll}
-                                variant="secondary"
-                                size="sm"
-                                className="bg-emerald-600 text-white hover:bg-emerald-700"
-                            >
-                                <SaveIcon size={14} />
-                                Save All ({dirtyCount})
-                            </Button>
+                            <>
+                                <Button
+                                    onClick={handleSaveAll}
+                                    variant="secondary"
+                                    size="sm"
+                                    className="bg-emerald-600 text-white hover:bg-emerald-700"
+                                >
+                                    <SaveIcon size={14} />
+                                    Save All ({dirtyCount})
+                                </Button>
+                                <Button
+                                    onClick={handleDiscardAll}
+                                    variant="secondary"
+                                    size="sm"
+                                    className="bg-gray-600 text-white hover:bg-gray-700"
+                                >
+                                    <UndoIcon size={14} />
+                                    Discard All
+                                </Button>
+                            </>
                         )}
                         <Tooltip
                             text="Use AI to automatically find and extract locations mentioned in your selected text"
