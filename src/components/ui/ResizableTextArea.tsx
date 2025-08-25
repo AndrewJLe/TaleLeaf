@@ -17,7 +17,7 @@ export const ResizableTextArea: React.FC<ResizableTextAreaProps> = ({
     placeholder,
     className = '',
     minRows = 3,
-    maxRows = 20
+    maxRows = 20,
 }) => {
     const textAreaRef = useRef<HTMLTextAreaElement>(null);
     const [isDragging, setIsDragging] = useState(false);
@@ -83,18 +83,15 @@ export const ResizableTextArea: React.FC<ResizableTextAreaProps> = ({
                 onChange={(e) => onChange(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={placeholder}
-                className={`w-full p-3 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all resize-none ${className}`}
+                className={`w-full p-3 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all resize-y overflow-auto ${className}`}
                 style={{ minHeight: `${minRows * 24}px` }}
             />
 
-            {/* Resize handle */}
+            {/* Optional subtle drag area to allow click-drag resizing without custom visible handle */}
             <div
-                className={`absolute bottom-0 right-0 w-4 h-4 cursor-nw-resize opacity-50 hover:opacity-100 transition-opacity ${isDragging ? 'opacity-100' : ''
-                    }`}
+                className={`absolute bottom-0 right-0 w-6 h-6 -translate-y-0 -translate-x-0 cursor-ns-resize opacity-0 hover:opacity-20 transition-opacity`}
                 onMouseDown={handleMouseDown}
-                style={{
-                    background: 'linear-gradient(-45deg, transparent 30%, #10b981 30%, #10b981 35%, transparent 35%, transparent 65%, #10b981 65%, #10b981 70%, transparent 70%)',
-                }}
+                aria-hidden="true"
             />
         </div>
     );

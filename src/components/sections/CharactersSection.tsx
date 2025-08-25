@@ -446,6 +446,7 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                                     onChange={(notes) => handleCharacterNotesChange(character, notes)}
                                     onSave={() => handleSaveCharacter(character)}
                                     placeholder="Describe this character, their personality, role, background..."
+                                    className="!bg-white !border-gray-200"
                                     minRows={3}
                                     maxRows={15}
                                 />
