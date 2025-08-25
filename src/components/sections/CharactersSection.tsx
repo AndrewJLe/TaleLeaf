@@ -103,6 +103,14 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
         return luminance(bgHex) > 0.5 ? '#111827' : '#ffffff';
     };
 
+    const hexToRgba = (hex: string, alpha = 0.85) => {
+        const c = hex.replace('#', '');
+        const r = parseInt(c.substring(0, 2), 16);
+        const g = parseInt(c.substring(2, 4), 16);
+        const b = parseInt(c.substring(4, 6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
+
     const isValidTag = (t: string) => /^[a-z0-9]+$/.test(t);
 
     const handleCreateTag = (character: Character, index: number) => {
@@ -479,12 +487,16 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                                 <div className="flex items-center justify-between">
                                     <div className="flex flex-wrap items-center gap-2">
                                         {(character.tags || []).map(tag => (
-                                            <div key={tag} className="group inline-flex items-center rounded-full px-2 py-0.5 text-xs sm:text-sm font-medium transform transition-transform hover:scale-105" style={{ backgroundColor: colorForTagName(tag), color: readableTextColor(colorForTagName(tag)) }}>
+                                            <div
+                                                key={tag}
+                                                className="inline-flex items-center rounded-full px-2 py-0.5 text-xs sm:text-sm font-medium transform transition-transform hover:scale-105 hover:[&>button]:opacity-100"
+                                                style={{ backgroundColor: hexToRgba(colorForTagName(tag), 0.6), color: readableTextColor(colorForTagName(tag)) }}
+                                            >
                                                 <span className="truncate max-w-[10rem]">{tag}</span>
                                                 <button
                                                     aria-label={`Remove tag ${tag}`}
                                                     onClick={() => handleRemoveTag(character, index, tag)}
-                                                    className="ml-2 text-red-600 font-semibold text-xs sm:text-sm opacity-0 group-hover:opacity-100 focus:opacity-100 focus:outline-none"
+                                                    className="ml-2 text-red-600 font-semibold text-xs sm:text-sm opacity-0 focus:opacity-100 focus:outline-none transition-all transform hover:scale-110 hover:font-bold hover:text-red-700 px-1"
                                                 >
                                                     ×
                                                 </button>
@@ -495,11 +507,11 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                                         {addingTagFor !== character.id && (
                                             <button
                                                 onClick={() => { setAddingTagFor(character.id); setTimeout(() => inputRefs.current[character.id]?.focus(), 0); }}
-                                                className="px-2 py-1 rounded-md bg-emerald-600 text-white text-sm flex items-center gap-1 hover:bg-emerald-700 shadow-sm transition-all"
+                                                className="inline-flex items-center justify-center rounded-full px-2 py-0.5 bg-emerald-200/40 text-emerald-500 text-sm border border-white/20 hover:bg-emerald-200/80 hover:scale-105 transition-all shadow-sm"
                                                 aria-label="Add tag"
                                             >
-                                                <span className="font-semibold">+</span>
-                                                <span aria-hidden className="text-sm">🏷️</span>
+                                                <span className="text-sm">+</span>
+                                                <span aria-hidden className="ml-1 text-xs">🏷️</span>
                                             </button>
                                         )}
                                     </div>
@@ -537,7 +549,7 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                                                         setAddingTagFor(null);
                                                     }
                                                 }}
-                                                placeholder="add tag (lowercase alphanumeric)"
+                                                placeholder="add tag here"
                                                 className="px-3 py-2 sm:py-1 border border-gray-200 rounded-lg bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 transition-colors duration-150 w-full sm:w-auto"
                                             />
                                             <button
