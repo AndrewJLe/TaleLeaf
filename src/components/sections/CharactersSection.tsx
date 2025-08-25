@@ -327,7 +327,7 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
 
             <div className="space-y-4">
                 {characters.map((character, index) => (
-                    <div key={character.id} className="p-4 sm:p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
+                    <div key={character.id} className="group relative overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-emerald-100 to-white border border-emerald-100 hover:border-2 hover:border-emerald-400 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
                         <div className="space-y-4">
                             {/* Title Row */}
                             <div className="flex items-center gap-3">
@@ -455,6 +455,11 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                                     </p>
                                 )}
                             </div>
+                        </div>
+
+                        {/* Sheen overlay: thin diagonal light line moving across the card */}
+                        <div className="pointer-events-none absolute inset-0 z-20 transform -translate-x-full -translate-y-full group-hover:translate-x-full group-hover:translate-y-full transition-transform duration-900 ease-out will-change-transform">
+                            <div className="absolute left-0 top-[-10%] -translate-y-1/4 bg-gradient-to-r from-transparent via-white/70 to-transparent w-12 h-[300%] rotate-45 -skew-x-12 opacity-80 blur-md"></div>
                         </div>
                     </div>
                 ))}
