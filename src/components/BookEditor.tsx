@@ -214,6 +214,23 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         }
     }, [featureFlags.notesV2, discardAllChanges]);
 
+    // Stable unsaved-change update handlers to avoid creating new function refs each render
+    const handleCharactersUnsavedUpdate = useCallback((hasChanges: boolean, count: number) => {
+        setCharactersUnsaved({ hasChanges, count });
+    }, []);
+
+    const handleChaptersUnsavedUpdate = useCallback((hasChanges: boolean, count: number) => {
+        setChaptersUnsaved({ hasChanges, count });
+    }, []);
+
+    const handleLocationsUnsavedUpdate = useCallback((hasChanges: boolean, count: number) => {
+        setLocationsUnsaved({ hasChanges, count });
+    }, []);
+
+    const handleNotesUnsavedUpdate = useCallback((hasChanges: boolean, count: number) => {
+        setNotesUnsaved({ hasChanges, count });
+    }, []);
+
     // Database persistence
     const {
         isLoading: isPersisting,
@@ -567,7 +584,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                 generateCharacters
                                             )}
                                             onBatchUpdateCharacters={batchUpdateCharacters}
-                                            onUnsavedChangesUpdate={(hasChanges, count) => setCharactersUnsaved({ hasChanges, count })}
+                                            onUnsavedChangesUpdate={handleCharactersUnsavedUpdate}
                                             onSaveAllRef={charactersSaveAllRef}
                                             onDiscardAllRef={charactersDiscardAllRef}
                                             isGenerating={aiGenerationState.characters}
@@ -590,7 +607,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                 () => generateChapterSummary(chapterIndex)
                                             )}
                                             onBatchUpdateChapters={batchUpdateChapters}
-                                            onUnsavedChangesUpdate={(hasChanges, count) => setChaptersUnsaved({ hasChanges, count })}
+                                            onUnsavedChangesUpdate={handleChaptersUnsavedUpdate}
                                             onSaveAllRef={chaptersSaveAllRef}
                                             onDiscardAllRef={chaptersDiscardAllRef}
                                             isGenerating={aiGenerationState.chapters}
@@ -613,7 +630,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                 generateLocations
                                             )}
                                             onBatchUpdateLocations={batchUpdateLocations}
-                                            onUnsavedChangesUpdate={(hasChanges, count) => setLocationsUnsaved({ hasChanges, count })}
+                                            onUnsavedChangesUpdate={handleLocationsUnsavedUpdate}
                                             onSaveAllRef={locationsSaveAllRef}
                                             onDiscardAllRef={locationsDiscardAllRef}
                                             isGenerating={aiGenerationState.locations}
@@ -665,7 +682,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                     isSaving={isPersisting}
                                                     lastSaved={lastSaved}
                                                     saveError={persistError}
-                                                    onUnsavedChangesUpdate={(hasChanges, count) => setNotesUnsaved({ hasChanges, count })}
+                                                    onUnsavedChangesUpdate={handleNotesUnsavedUpdate}
                                                     onSaveAllRef={legacyNotesSaveAllRef}
                                                     onDiscardAllRef={legacyNotesDiscardAllRef}
                                                 />

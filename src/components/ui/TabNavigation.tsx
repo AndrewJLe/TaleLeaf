@@ -94,11 +94,7 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({
                             >
                                 <Icon size={16} strokeWidth={2} />
                                 <span>{tab.label}</span>
-                                {unsavedChanges[tab.id]?.hasChanges && (
-                                    <span className="ml-1 bg-yellow-400 text-yellow-900 text-xs px-1.5 py-0.5 rounded-full">
-                                        {unsavedChanges[tab.id]?.count || 0}
-                                    </span>
-                                )}
+                                {/* Indicator removed: modal still appears when unsaved changes exist */}
                             </button>
                         );
                     })}

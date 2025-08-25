@@ -372,13 +372,15 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
 
                                     {dirty[note.id] && (
                                         <Tooltip text="Cancel changes and revert to saved version" id={`cancel-note-${note.id}`}>
-                                            <button
+                                            <Button
                                                 onClick={() => handleCancelNote(note)}
-                                                className="px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                                variant="secondary"
+                                                size="sm"
+                                                className="bg-gray-200 text-gray-800 hover:bg-gray-300"
                                             >
                                                 <UndoIcon size={14} />
                                                 <span className="hidden sm:inline">Cancel</span>
-                                            </button>
+                                            </Button>
                                         </Tooltip>
                                     )}
 

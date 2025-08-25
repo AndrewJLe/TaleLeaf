@@ -358,6 +358,24 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
                                             {savingStates[location.id] ? 'Saving...' : 'Save'}
                                         </span>
                                     </button>
+                                    {dirty[location.id] && (
+                                        <Button
+                                            onClick={() => {
+                                                // Revert draft for this location
+                                                setDrafts(prev => {
+                                                    const { [location.id]: _, ...rest } = prev;
+                                                    return rest;
+                                                });
+                                                setDirty(prev => ({ ...prev, [location.id]: false }));
+                                            }}
+                                            variant="secondary"
+                                            size="sm"
+                                            className="bg-gray-200 text-gray-800 hover:bg-gray-300"
+                                        >
+                                            <UndoIcon size={14} />
+                                            <span className="hidden sm:inline">Cancel</span>
+                                        </Button>
+                                    )}
                                     <SaveStateIndicator
                                         isSaving={savingStates[location.id] || false}
                                         hasUnsavedChanges={dirty[location.id] || false}

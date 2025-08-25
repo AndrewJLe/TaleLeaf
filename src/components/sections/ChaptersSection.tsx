@@ -363,6 +363,24 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
                                             {savingStates[chapter.id] ? 'Saving...' : 'Save'}
                                         </span>
                                     </button>
+                                    {dirty[chapter.id] && (
+                                        <Button
+                                            onClick={() => {
+                                                // Revert draft for this chapter
+                                                setDrafts(prev => {
+                                                    const { [chapter.id]: _, ...rest } = prev;
+                                                    return rest;
+                                                });
+                                                setDirty(prev => ({ ...prev, [chapter.id]: false }));
+                                            }}
+                                            variant="secondary"
+                                            size="sm"
+                                            className="bg-gray-200 text-gray-800 hover:bg-gray-300"
+                                        >
+                                            <UndoIcon size={14} />
+                                            <span className="hidden sm:inline">Cancel</span>
+                                        </Button>
+                                    )}
                                     <SaveStateIndicator
                                         isSaving={savingStates[chapter.id] || false}
                                         hasUnsavedChanges={dirty[chapter.id] || false}

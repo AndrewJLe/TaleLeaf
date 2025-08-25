@@ -366,6 +366,24 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                                             {savingStates[character.id] ? 'Saving...' : 'Save'}
                                         </span>
                                     </button>
+                                    {dirty[character.id] && (
+                                        <Button
+                                            onClick={() => {
+                                                // Revert draft for this character
+                                                setDrafts(prev => {
+                                                    const { [character.id]: _, ...rest } = prev;
+                                                    return rest;
+                                                });
+                                                setDirty(prev => ({ ...prev, [character.id]: false }));
+                                            }}
+                                            variant="secondary"
+                                            size="sm"
+                                            className="bg-gray-200 text-gray-800 hover:bg-gray-300"
+                                        >
+                                            <UndoIcon size={14} />
+                                            <span className="hidden sm:inline">Cancel</span>
+                                        </Button>
+                                    )}
                                     <SaveStateIndicator
                                         isSaving={savingStates[character.id]}
                                         showSaved={showSavedStates[character.id]}
