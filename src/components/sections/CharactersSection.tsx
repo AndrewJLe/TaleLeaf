@@ -49,6 +49,9 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
     const [dirty, setDirty] = useState<Record<string, boolean>>({});
     const [savingStates, setSavingStates] = useState<Record<string, boolean>>({});
     const [showSavedStates, setShowSavedStates] = useState<Record<string, boolean>>({});
+    // Local state for inline name editing
+    const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
+    const [editingName, setEditingName] = useState<Record<string, boolean>>({});
 
     // Create character lookup map for easy access
     const characterMap = React.useMemo(() => {
@@ -331,19 +334,67 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                         <div className="space-y-4">
                             {/* Title Row */}
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center relative flex-shrink-0">
+                                <div
+                                    className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center relative flex-shrink-0 transition-transform transform hover:scale-105 active:scale-95 cursor-pointer"
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => { /* TODO: open character details modal */ }}
+                                >
                                     <UsersIcon size={18} className="text-amber-600" />
                                     {dirty[character.id] && (
                                         <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white"></div>
                                     )}
                                 </div>
-                                <input
-                                    type="text"
-                                    value={character.name}
-                                    onChange={(e) => onUpdateCharacter(index, { ...character, name: e.target.value })}
-                                    className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-lg px-3 py-1 -mx-3 flex-1 min-w-0"
-                                    placeholder="Character name"
-                                />
+
+                                <div className="flex items-center gap-2 flex-1 min-w-0 group">
+                                    {editingName[character.id] ? (
+                                        <input
+                                            autoFocus
+                                            type="text"
+                                            value={nameDrafts[character.id] ?? character.name}
+                                            onChange={(e) => setNameDrafts(prev => ({ ...prev, [character.id]: e.target.value }))}
+                                            onBlur={() => {
+                                                const newName = nameDrafts[character.id];
+                                                if (newName !== undefined && newName !== character.name) {
+                                                    onUpdateCharacter(index, { ...character, name: newName });
+                                                }
+                                                setEditingName(prev => ({ ...prev, [character.id]: false }));
+                                                setNameDrafts(prev => { const copy = { ...prev }; delete copy[character.id]; return copy; });
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    const newName = nameDrafts[character.id];
+                                                    if (newName !== undefined && newName !== character.name) {
+                                                        onUpdateCharacter(index, { ...character, name: newName });
+                                                    }
+                                                    setEditingName(prev => ({ ...prev, [character.id]: false }));
+                                                    setNameDrafts(prev => { const copy = { ...prev }; delete copy[character.id]; return copy; });
+                                                } else if (e.key === 'Escape') {
+                                                    setEditingName(prev => ({ ...prev, [character.id]: false }));
+                                                    setNameDrafts(prev => { const copy = { ...prev }; delete copy[character.id]; return copy; });
+                                                }
+                                            }}
+                                            className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-lg px-3 py-1 w-full"
+                                        />
+                                    ) : (
+                                        <div className="flex items-center gap-2 w-full">
+                                            <div className="font-semibold text-gray-900 text-lg truncate">{character.name || 'Character name'}</div>
+                                            <Tooltip text="Edit character name" id={`edit-character-name-${character.id}`}>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); setNameDrafts(prev => ({ ...prev, [character.id]: character.name })); setEditingName(prev => ({ ...prev, [character.id]: true })); }}
+                                                    className="ml-1 p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700 focus:outline-none opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-opacity"
+                                                    aria-label={`Edit name for ${character.name}`}
+                                                >
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                                                        <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="currentColor" />
+                                                        <path d="M20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z" fill="currentColor" />
+                                                    </svg>
+                                                </button>
+                                            </Tooltip>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Actions Row - Responsive Layout */}
