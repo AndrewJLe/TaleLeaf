@@ -49,33 +49,32 @@ export function useBookTagGroups(bookId: string, enabled: boolean = true): UseBo
     if (!enabled || !isSupabaseEnabled || !supabaseClient) return;
     try {
       const normalized = name.toLowerCase();
+      // Use explicit select -> update/insert flow to avoid REST upsert on_conflict issues
+      const existing = await supabaseClient.from('book_tags').select('*').eq('book_id', bookId).eq('name', normalized).maybeSingle();
+      if (existing.error) throw existing.error;
       let data: any[] | null = null;
-      let upErr: any = null;
-      try {
-        const res = await supabaseClient.from('book_tags').upsert({ book_id: bookId, name: normalized, color }, { onConflict: 'book_id,name' }).select();
-        data = res.data; upErr = res.error;
-      } catch (e: any) {
-        upErr = e;
-      }
-      if (upErr) {
-        // Fallback path if unique constraint missing or onConflict unsupported
-        if (/on conflict|unique|exclusion/i.test(upErr.message || '')) {
-          // Try fetch existing
-          const existing = await supabaseClient.from('book_tags').select('*').eq('book_id', bookId).eq('name', normalized).maybeSingle();
-          if (existing.error) throw existing.error;
-          if (!existing.data) {
-            const ins = await supabaseClient.from('book_tags').insert({ book_id: bookId, name: normalized, color }).select();
-            if (ins.error && !/duplicate|unique/i.test(ins.error.message || '')) throw ins.error;
-            data = ins.data as any[];
-          } else if (existing.data.color !== color) {
-            const upd = await supabaseClient.from('book_tags').update({ color }).eq('id', existing.data.id).select();
-            if (upd.error) throw upd.error;
-            data = upd.data as any[];
+      if (!existing.data) {
+        const ins = await supabaseClient.from('book_tags').insert({ book_id: bookId, name: normalized, color }).select();
+        if (ins.error) {
+          // If duplicate error due to race, try to fetch again
+          if (/duplicate|unique/i.test(ins.error.message || '')) {
+            const refetch = await supabaseClient.from('book_tags').select('*').eq('book_id', bookId).eq('name', normalized).maybeSingle();
+            if (refetch.error) throw refetch.error;
+            data = refetch.data ? [refetch.data] : null;
           } else {
-            data = [existing.data];
+            console.error('Failed insert tag', ins.error);
+            throw ins.error;
           }
         } else {
-          throw upErr;
+          data = ins.data as any[];
+        }
+      } else {
+        if (existing.data.color !== color) {
+          const upd = await supabaseClient.from('book_tags').update({ color }).eq('id', existing.data.id).select();
+          if (upd.error) throw upd.error;
+          data = upd.data as any[];
+        } else {
+          data = [existing.data];
         }
       }
       // Merge into local state to avoid full refetch flicker
@@ -86,7 +85,6 @@ export function useBookTagGroups(bookId: string, enabled: boolean = true): UseBo
           copy[existingIdx] = { ...copy[existingIdx], color };
           return copy;
         }
-        // If API returned a row use that, else synthesize
         const row: any = data?.[0];
         return [...prev, row ? { id: row.id, bookId: row.book_id, name: row.name, color: row.color, createdAt: row.created_at, updatedAt: row.updated_at } : { id: crypto.randomUUID(), bookId, name: normalized, color, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }];
       });
