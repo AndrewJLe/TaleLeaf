@@ -118,12 +118,8 @@ export const NotesNormalizedSection: React.FC<NotesNormalizedSectionProps> = ({
   };
   const handleNotesChange = (entity: NoteEntityProxy, value: string) => { updateDraft(entity.id, { body: value }); };
 
-  // Name editing handlers (pencil mode)
-  const startNameEdit = (id: string) => {
-    const note = notes.find(n => n.id === id);
-    setNameDrafts(prev => ({ ...prev, [id]: note?.title || '' }));
-    setEditingName(prev => ({ ...prev, [id]: true }));
-  };
+  // Name editing handled inline when starting edit so the draft is initialized
+  // from the displayed proxy entity (keeps behavior consistent with other sections)
 
   const changeNameDraft = (id: string, v: string) => setNameDrafts(prev => ({ ...prev, [id]: v }));
 
@@ -213,33 +209,42 @@ export const NotesNormalizedSection: React.FC<NotesNormalizedSectionProps> = ({
         {error && <div className="text-sm text-red-600">{error}</div>}
       </div>
       <div className="space-y-4">
-        {proxyEntities.map((entity, index) => (
-          <BaseEntityCard
-            key={entity.id}
-            entity={entity as any}
-            index={index}
-            totalCount={proxyEntities.length}
-            config={{ ...config, showSpecialActions: spoilerAction(entity.id) }}
-            displayValue={entity.notes}
-            isDirty={isDirty(entity.id)}
-            isSaving={!!saving[entity.id]}
-            showSaved={!!showSaved[entity.id]}
-            onUpdateEntity={handleUpdateEntity as any}
-            onNotesChange={handleNotesChange as any}
-            onSave={() => handleSave(entity)}
-            onCancel={() => handleCancel(entity)}
-            onMove={handleMove}
-            onDelete={handleDelete}
-            tagColorMap={tagColorMap}
-            onPersistTagColor={onPersistTagColor}
-            // Name edit props (pencil mode)
-            editingName={!!editingName[entity.id]}
-            nameDraft={nameDrafts[entity.id] ?? entity.name}
-            onStartNameEdit={() => startNameEdit(entity.id)}
-            onNameChange={(v) => changeNameDraft(entity.id, v)}
-            onFinishNameEdit={(save) => finishNameEdit(entity.id, save)}
-          />
-        ))}
+        {proxyEntities.map((entity, index) => {
+          const noteObj = notes.find(n => n.id === entity.id);
+          const initialName = nameDrafts[entity.id] ?? noteObj?.title ?? (noteObj?.body ? noteObj.body.slice(0, 60) : entity.name);
+          return (
+            <BaseEntityCard
+              key={entity.id}
+              entity={entity as any}
+              index={index}
+              totalCount={proxyEntities.length}
+              config={{ ...config, showSpecialActions: spoilerAction(entity.id) }}
+              displayValue={entity.notes}
+              isDirty={isDirty(entity.id)}
+              isSaving={!!saving[entity.id]}
+              showSaved={!!showSaved[entity.id]}
+              onUpdateEntity={handleUpdateEntity as any}
+              onNotesChange={handleNotesChange as any}
+              onSave={() => handleSave(entity)}
+              onCancel={() => handleCancel(entity)}
+              onMove={handleMove}
+              onDelete={handleDelete}
+              tagColorMap={tagColorMap}
+              onPersistTagColor={onPersistTagColor}
+              // Name edit props (pencil mode)
+              editingName={!!editingName[entity.id]}
+              nameDraft={initialName}
+              onStartNameEdit={() => {
+                const noteObj = notes.find(n => n.id === entity.id);
+                const initial = nameDrafts[entity.id] ?? noteObj?.title ?? (noteObj?.body ? noteObj.body.slice(0, 60) : entity.name);
+                setNameDrafts(prev => ({ ...prev, [entity.id]: initial }));
+                setEditingName(prev => ({ ...prev, [entity.id]: true }));
+              }}
+              onNameChange={(v) => changeNameDraft(entity.id, v)}
+              onFinishNameEdit={(save) => finishNameEdit(entity.id, save)}
+            />
+          );
+        })}
         {proxyEntities.length === 0 && !isLoading && (
           <div className="text-center py-12 text-gray-500">
             <NotebookIcon size={64} strokeWidth={1} className="text-gray-300 mb-4" />

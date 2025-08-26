@@ -36,13 +36,14 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     const notes = (data || []).map(n => ({
       id: n.id,
       bookId: n.book_id,
-      title: n.title || undefined,
+      // preserve empty titles ("") instead of converting to undefined/null
+      title: n.title ?? undefined,
       body: n.body || '',
       tags: tagMap[n.id] || [],
       position: n.position || 0,
       spoilerProtected: n.spoiler_protected || false,
-      minVisiblePage: n.min_visible_page || undefined,
-      groupId: n.group_id || null,
+      minVisiblePage: n.min_visible_page ?? undefined,
+      groupId: n.group_id ?? null,
       createdAt: n.created_at,
       updatedAt: n.updated_at
     }));
@@ -68,12 +69,13 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     await ensureBookOwnership(supabase, bookId, user.id);
     const insertBody: any = {
       book_id: bookId,
-      title: payload.title || null,
+      // allow empty string titles to be saved; only coerce null/undefined to null
+      title: payload.title ?? null,
       body: payload.body || '',
       position: payload.position,
       spoiler_protected: payload.spoilerProtected || false,
-      min_visible_page: payload.minVisiblePage || null,
-      group_id: payload.groupId || null
+      min_visible_page: payload.minVisiblePage ?? null,
+      group_id: payload.groupId ?? null
     };
     const { data: inserted, error: insErr } = await supabase.from('book_notes').insert(insertBody).select('id,book_id,title,body,position,spoiler_protected,min_visible_page,group_id,created_at,updated_at').single();
     if (insErr) throw insErr;
@@ -104,13 +106,13 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       note: {
         id: inserted.id,
         bookId: inserted.book_id,
-        title: inserted.title || undefined,
+        title: inserted.title ?? undefined,
         body: inserted.body || '',
         tags: (payload.tags || []).map(t => t.toLowerCase()),
         position: inserted.position || 0,
         spoilerProtected: inserted.spoiler_protected || false,
-        minVisiblePage: inserted.min_visible_page || undefined,
-        groupId: inserted.group_id || null,
+        minVisiblePage: inserted.min_visible_page ?? undefined,
+        groupId: inserted.group_id ?? null,
         createdAt: inserted.created_at,
         updatedAt: inserted.updated_at
       }
@@ -137,12 +139,12 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
     if (exErr) throw exErr;
     if (!existing) return NextResponse.json({ error: 'not found' }, { status: 404 });
     const updateBody: any = {
-      title: payload.title || null,
+      title: payload.title ?? null,
       body: payload.body || '',
       position: payload.position,
       spoiler_protected: payload.spoilerProtected || false,
-      min_visible_page: payload.minVisiblePage || null,
-      group_id: payload.groupId || null
+      min_visible_page: payload.minVisiblePage ?? null,
+      group_id: payload.groupId ?? null
     };
     const { data: updated, error: updErr } = await supabase.from('book_notes').update(updateBody).eq('id', payload.id).select('id,book_id,title,body,position,spoiler_protected,min_visible_page,group_id,created_at,updated_at').single();
     if (updErr) throw updErr;
@@ -179,13 +181,13 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
       note: {
         id: updated.id,
         bookId: updated.book_id,
-        title: updated.title || undefined,
+        title: updated.title ?? undefined,
         body: updated.body || '',
         tags: (payload.tags || []).map(t => t.toLowerCase()),
         position: updated.position || 0,
         spoilerProtected: updated.spoiler_protected || false,
-        minVisiblePage: updated.min_visible_page || undefined,
-        groupId: updated.group_id || null,
+        minVisiblePage: updated.min_visible_page ?? undefined,
+        groupId: updated.group_id ?? null,
         createdAt: updated.created_at,
         updatedAt: updated.updated_at
       }
