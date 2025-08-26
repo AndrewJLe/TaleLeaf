@@ -217,7 +217,15 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                             onUpdateCharacter={(_, updated) => { normalizedCharacters.update(updated.id, updated as any); }}
                                             onBatchUpdateCharacters={async (chars) => { await Promise.all(chars.map(c => normalizedCharacters.update(c.id, c as any))); }}
                                             onDeleteCharacter={(index) => { const target = normalizedCharacters.items[index]; if (target) normalizedCharacters.remove(target.id); }}
-                                            onMoveCharacter={() => { /* TODO: implement position reorder for normalized characters */ }}
+                                            onMoveCharacter={async (index, direction) => {
+                                                const ordered = [...normalizedCharacters.items].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+                                                const swapIndex = direction === 'up' ? index - 1 : index + 1;
+                                                if (swapIndex < 0 || swapIndex >= ordered.length) return;
+                                                // Create reordered list using fast reorder method
+                                                const reorderedIds = [...ordered];
+                                                [reorderedIds[index], reorderedIds[swapIndex]] = [reorderedIds[swapIndex], reorderedIds[index]];
+                                                await normalizedCharacters.reorder(reorderedIds.map(item => item.id));
+                                            }}
                                             onGenerateCharacters={() => confirmAIAction('generate characters', 'Analyze the provided text and identified all characters mentioned', generateCharacters)}
                                             onUnsavedChangesUpdate={handleCharactersUnsavedUpdate}
                                             onSaveAllRef={charactersSaveAllRef}
@@ -236,7 +244,15 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                             onAddChapter={(c) => { normalizedChapters.create(c as any); }}
                                             onUpdateChapter={(_, updated) => { normalizedChapters.update((updated as any).id, updated as any); }}
                                             onDeleteChapter={(index) => { const target = normalizedChapters.items[index]; if (target) normalizedChapters.remove(target.id); }}
-                                            onMoveChapter={() => { /* TODO: implement position reorder for chapters */ }}
+                                            onMoveChapter={async (index, direction) => {
+                                                const ordered = [...normalizedChapters.items].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+                                                const swapIndex = direction === 'up' ? index - 1 : index + 1;
+                                                if (swapIndex < 0 || swapIndex >= ordered.length) return;
+                                                // Create reordered list using fast reorder method
+                                                const reorderedIds = [...ordered];
+                                                [reorderedIds[index], reorderedIds[swapIndex]] = [reorderedIds[swapIndex], reorderedIds[index]];
+                                                await normalizedChapters.reorder(reorderedIds.map(item => item.id));
+                                            }}
                                             onGenerateSummary={(chapterIndex) => confirmAIAction('generate chapter summary', 'Create a concise chapter summary for the provided text', () => generateChapterSummary(chapterIndex))}
                                             onBatchUpdateChapters={async (chapters) => { await Promise.all(chapters.map(ch => normalizedChapters.update((ch as any).id, ch as any))); }}
                                             onUnsavedChangesUpdate={handleChaptersUnsavedUpdate}
@@ -256,7 +272,15 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                             onAddLocation={(c) => { normalizedLocations.create(c as any); }}
                                             onUpdateLocation={(_, updated) => { normalizedLocations.update(updated.id, updated as any); }}
                                             onDeleteLocation={(index) => { const target = normalizedLocations.items[index]; if (target) normalizedLocations.remove(target.id); }}
-                                            onMoveLocation={() => { /* TODO: implement position reorder for locations */ }}
+                                            onMoveLocation={async (index, direction) => {
+                                                const ordered = [...normalizedLocations.items].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+                                                const swapIndex = direction === 'up' ? index - 1 : index + 1;
+                                                if (swapIndex < 0 || swapIndex >= ordered.length) return;
+                                                // Create reordered list using fast reorder method
+                                                const reorderedIds = [...ordered];
+                                                [reorderedIds[index], reorderedIds[swapIndex]] = [reorderedIds[swapIndex], reorderedIds[index]];
+                                                await normalizedLocations.reorder(reorderedIds.map(item => item.id));
+                                            }}
                                             onGenerateLocations={() => confirmAIAction('generate locations', 'Analyze the provided text and identify all locations, places, and settings mentioned', generateLocations)}
                                             onBatchUpdateLocations={async (locs) => { await Promise.all(locs.map(l => normalizedLocations.update(l.id, l as any))); }}
                                             onUnsavedChangesUpdate={handleLocationsUnsavedUpdate}

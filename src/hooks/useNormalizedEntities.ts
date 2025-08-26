@@ -10,6 +10,7 @@ interface BaseResult<T> {
   create: (input: Partial<T> & { name?: string; title?: string }) => Promise<T | null>;
   update: (id: string, patch: Partial<T>) => Promise<T | null>;
   remove: (id: string) => Promise<boolean>;
+  reorder: (orderedIds: string[]) => Promise<void>;
 }
 
 async function jsonFetch<T>(url: string, options?: RequestInit, attempt = 1): Promise<T> {
@@ -95,7 +96,33 @@ export function useNormalizedCharacters(bookId: string, enable: boolean): BaseRe
     return true;
   }, [bookId, enable]);
 
-  return { items, loading, error, refresh, create, update, remove };
+  const reorder = useCallback(async (orderedIds: string[]) => {
+    if (!enable) return;
+    try {
+      // Optimistically update local state first for immediate UI response
+      const orderedItems = orderedIds.map((id, index) => {
+        const item = items.find(c => c.id === id);
+        return item ? { ...item, position: index * 1000 } : null;
+      }).filter(Boolean) as Character[];
+      setItems(orderedItems);
+
+      // Update positions via API in background
+      for (let i = 0; i < orderedIds.length; i++) {
+        const id = orderedIds[i];
+        const position = i * 1000;
+        await jsonFetch(`/api/books/${bookId}/characters`, { 
+          method: 'PUT', 
+          body: JSON.stringify({ id, position }) 
+        });
+      }
+    } catch (e: any) {
+      setError(e.message);
+      // Revert optimistic update on error
+      refresh();
+    }
+  }, [bookId, enable, items, refresh]);
+
+  return { items, loading, error, refresh, create, update, remove, reorder };
 }
 
 export function useNormalizedChapters(bookId: string, enable: boolean): BaseResult<Chapter> {
@@ -124,7 +151,22 @@ export function useNormalizedChapters(bookId: string, enable: boolean): BaseResu
     return data.chapter;
   }, [bookId, enable, items]);
   const remove = useCallback(async (id: string) => { if (!enable) return false; await jsonFetch(`/api/books/${bookId}/chapters?id=${id}`, { method: 'DELETE' }); setItems(prev => prev.filter(c => c.id !== id)); return true; }, [bookId, enable]);
-  return { items, loading, error, refresh, create, update, remove };
+  const reorder = useCallback(async (orderedIds: string[]) => {
+    if (!enable) return;
+    try {
+      const orderedItems = orderedIds.map((id, index) => {
+        const item = items.find(c => c.id === id);
+        return item ? { ...item, position: index * 1000 } : null;
+      }).filter(Boolean) as Chapter[];
+      setItems(orderedItems);
+      for (let i = 0; i < orderedIds.length; i++) {
+        const id = orderedIds[i];
+        const position = i * 1000;
+        await jsonFetch(`/api/books/${bookId}/chapters`, { method: 'PUT', body: JSON.stringify({ id, position }) });
+      }
+    } catch (e: any) { setError(e.message); refresh(); }
+  }, [bookId, enable, items, refresh]);
+  return { items, loading, error, refresh, create, update, remove, reorder };
 }
 
 export function useNormalizedLocations(bookId: string, enable: boolean): BaseResult<Location> {
@@ -136,5 +178,20 @@ export function useNormalizedLocations(bookId: string, enable: boolean): BaseRes
   const create = useCallback(async (input: Partial<Location> & { name?: string }) => { if (!enable) return null; const payload = { name: input.name || 'Unnamed', notes: input.notes || '', parentId: input.parentId || null, position: input.position, tags: input.tags || [] }; const data = await jsonFetch<{ location: any }>(`/api/books/${bookId}/locations`, { method: 'POST', body: JSON.stringify(payload) }); setItems(prev => [...prev, data.location]); return data.location; }, [bookId, enable]);
   const update = useCallback(async (id: string, patch: Partial<Location>) => { if (!enable) return null; const existing = items.find(l => l.id === id); if (!existing) return null; const payload = { id, name: patch.name || existing.name, notes: patch.notes ?? existing.notes, parentId: patch.parentId ?? existing.parentId ?? null, position: patch.position ?? existing.position, tags: patch.tags || existing.tags }; const data = await jsonFetch<{ location: any }>(`/api/books/${bookId}/locations`, { method: 'PUT', body: JSON.stringify(payload) }); setItems(prev => prev.map(l => l.id === id ? data.location : l)); return data.location; }, [bookId, enable, items]);
   const remove = useCallback(async (id: string) => { if (!enable) return false; await jsonFetch(`/api/books/${bookId}/locations?id=${id}`, { method: 'DELETE' }); setItems(prev => prev.filter(l => l.id !== id)); return true; }, [bookId, enable]);
-  return { items, loading, error, refresh, create, update, remove };
+  const reorder = useCallback(async (orderedIds: string[]) => {
+    if (!enable) return;
+    try {
+      const orderedItems = orderedIds.map((id, index) => {
+        const item = items.find(l => l.id === id);
+        return item ? { ...item, position: index * 1000 } : null;
+      }).filter(Boolean) as Location[];
+      setItems(orderedItems);
+      for (let i = 0; i < orderedIds.length; i++) {
+        const id = orderedIds[i];
+        const position = i * 1000;
+        await jsonFetch(`/api/books/${bookId}/locations`, { method: 'PUT', body: JSON.stringify({ id, position }) });
+      }
+    } catch (e: any) { setError(e.message); refresh(); }
+  }, [bookId, enable, items, refresh]);
+  return { items, loading, error, refresh, create, update, remove, reorder };
 }
