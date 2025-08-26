@@ -15,7 +15,11 @@ export { Tooltip } from './components/ui/Tooltip';
 export { ChaptersSection } from './components/sections/ChaptersSection';
 export { CharactersSection } from './components/sections/CharactersSection';
 export { LocationsSection } from './components/sections/LocationsSection';
-export { NotesSection } from './components/sections/NotesSection';
+// Normalized notes section (legacy NotesSection removed)
+export { NotesNormalizedSection } from './components/sections/NotesNormalizedSection';
+
+// Shared utilities
+export { colorForTagName, readableTextColor, TAG_PALETTE } from './lib/tag-colors';
 
 // Main Components
 export { default as BookEditor } from './components/BookEditor';
