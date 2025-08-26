@@ -110,9 +110,9 @@ export function useNormalizedCharacters(bookId: string, enable: boolean): BaseRe
       for (let i = 0; i < orderedIds.length; i++) {
         const id = orderedIds[i];
         const position = i * 1000;
-        await jsonFetch(`/api/books/${bookId}/characters`, { 
-          method: 'PUT', 
-          body: JSON.stringify({ id, position }) 
+        await jsonFetch(`/api/books/${bookId}/characters`, {
+          method: 'PUT',
+          body: JSON.stringify({ id, position })
         });
       }
     } catch (e: any) {
