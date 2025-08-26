@@ -5,22 +5,22 @@ import { useSearchParams } from "next/navigation";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useAIGeneration } from "../hooks/useAIGeneration";
 import { useBookActions } from "../hooks/useBookActions";
-import { useBookNotes } from "../hooks/useBookNotes";
 import { useBookPersistence } from "../hooks/useBookPersistenceNew";
 import { useBookTagGroups } from "../hooks/useBookTagGroups";
-import { useNormalizedChapters, useNormalizedCharacters, useNormalizedLocations } from "../hooks/useNormalizedEntities";
+import { useNormalizedChapters, useNormalizedCharacters, useNormalizedLocations, useNormalizedNotes } from "../hooks/useNormalizedEntities";
 import { AIMessage, aiService, TokenEstimate } from "../lib/ai-service";
 import { BookEditorProps, TabType } from "../types/book";
 import ContextWindow from "./ContextWindow";
+import { BaseEntityCard } from "./sections/BaseEntityCard";
 import { ChaptersSection } from "./sections/ChaptersSection";
 import { CharactersSection } from "./sections/CharactersSection";
 import { LocationsSection } from "./sections/LocationsSection";
-import { NotesNormalizedSection } from "./sections/NotesNormalizedSection";
 import { SettingsModal } from "./SettingsModal";
 import { Button } from "./ui/Button";
 import { DocumentViewer } from "./ui/DocumentViewer";
-import { MessageSquareIcon, SettingsIcon } from "./ui/Icons";
+import { MessageSquareIcon, NotebookIcon, PlusIcon, SaveIcon, SettingsIcon, SparklesIcon, UndoIcon } from "./ui/Icons";
 import { RateLimitsModal } from "./ui/RateLimitsModal";
+import { SaveStatus } from "./ui/SaveStatus";
 import { SplitLayout } from "./ui/SplitLayout";
 import { TabNavigation } from "./ui/TabNavigation";
 import { TokenConfirmDialog } from "./ui/TokenConfirmDialog";
@@ -52,6 +52,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     const [showRateLimits, setShowRateLimits] = useState(false);
     const [tab, setTab] = useState<TabType>('characters');
     const [currentDocumentPage, setCurrentDocumentPage] = useState(1);
+    const [newNoteName, setNewNoteName] = useState('');
 
     // Unsaved state tracking
     // With normalized immediate persistence, treat unsaved as always clean (legacy draft system retained only for notes V1)
@@ -72,16 +73,14 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
 
     const { aiGenerationState, isAILoading, setIsAILoading, setGenerationLoading } = useAIGeneration();
 
-    // Normalized notes
-    const { notes: bookNotes, isLoading: notesLoading, error: notesError, addNote, updateNote, deleteNote, reorderNotes, updateDraft, cancelNote, saveNote, saveAllNotes, discardAllChanges, dirtyNoteIds, hasUnsavedChanges, immediateUpdateNote } = useBookNotes(local.id, true);
-
-    const { tags: tagMetadata, groups: noteGroups, upsertTag, upsertGroup } = useBookTagGroups(local.id, true);
-    const tagColorMap = React.useMemo(() => { const m: Record<string, string> = {}; tagMetadata.forEach(t => { m[t.name.toLowerCase()] = t.color; }); return m; }, [tagMetadata]);
-
-    // Normalized mode always on
+    // Normalized entities
     const normalizedCharacters = useNormalizedCharacters(local.id, true);
     const normalizedChapters = useNormalizedChapters(local.id, true);
     const normalizedLocations = useNormalizedLocations(local.id, true);
+    const normalizedNotes = useNormalizedNotes(local.id, true);
+
+    const { tags: tagMetadata, groups: noteGroups, upsertTag, upsertGroup } = useBookTagGroups(local.id, true);
+    const tagColorMap = React.useMemo(() => { const m: Record<string, string> = {}; tagMetadata.forEach(t => { m[t.name.toLowerCase()] = t.color; }); return m; }, [tagMetadata]);
 
     const { isLoading: isPersisting, error: persistError, saveBook, deleteBook, lastSaved } = useBookPersistence();
 
@@ -114,28 +113,187 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     const currentPageText = currentUpload?.pages ? (currentUpload.pages[currentDocumentPage - 1] || '') : '';
     const saveCurrentPageText = (value: string) => { if (!currentUpload?.pages) return; const updatedUpload = { ...currentUpload, pages: [...currentUpload.pages] }; updatedUpload.pages[currentDocumentPage - 1] = value; updateBook({ uploads: [updatedUpload] }); };
 
-    // Removed legacy sections sync (fully normalized)
+    const handleCharactersUnsavedUpdate = useCallback((has: boolean, count: number) => setCharactersUnsaved({ hasChanges: has, count }), []);
+    const handleChaptersUnsavedUpdate = useCallback((has: boolean, count: number) => setChaptersUnsaved({ hasChanges: has, count }), []);
+    const handleLocationsUnsavedUpdate = useCallback((has: boolean, count: number) => setLocationsUnsaved({ hasChanges: has, count }), []);
 
+    const [tokenConfirm, setTokenConfirm] = useState<{ isOpen: boolean; estimate: TokenEstimate | null; action: string; onConfirm: () => void | Promise<void>; }>({ isOpen: false, estimate: null, action: '', onConfirm: () => { } });
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    
+    // Note editing state (similar to CharactersSection)
+    const [editingNoteName, setEditingNoteName] = useState<Record<string, boolean>>({});
+    const [noteNameDrafts, setNoteNameDrafts] = useState<Record<string, string>>({});
+    const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+    const [dirtyNotes, setDirtyNotes] = useState<Record<string, boolean>>({});
+    const [savingNotesStates, setSavingNotesStates] = useState<Record<string, boolean>>({});
+    const [showSavedNotesStates, setShowSavedNotesStates] = useState<Record<string, boolean>>({});
+
+    // Note editing handlers
+    const handleNoteNotesChange = (note: any, notes: string) => {
+        setNoteDrafts(prev => ({ ...prev, [note.id]: notes }));
+        setDirtyNotes(prev => ({
+            ...prev,
+            [note.id]: notes !== note.body
+        }));
+    };
+
+    const getDisplayValue = (note: any): string => {
+        return noteDrafts[note.id] ?? note.body ?? '';
+    };
+
+    // Save individual note
+    const handleSaveNote = async (note: any) => {
+        if (!dirtyNotes[note.id]) return;
+
+        setSavingNotesStates(prev => ({ ...prev, [note.id]: true }));
+        setShowSavedNotesStates(prev => ({ ...prev, [note.id]: false }));
+
+        try {
+            // Ensure minimum 800ms for better UX perception
+            await Promise.all([
+                normalizedNotes.update(note.id, {
+                    body: noteDrafts[note.id]
+                }),
+                new Promise(resolve => setTimeout(resolve, 800))
+            ]);
+
+            // Clear draft and mark as clean
+            setNoteDrafts(prev => {
+                const { [note.id]: _, ...rest } = prev;
+                return rest;
+            });
+            setDirtyNotes(prev => ({ ...prev, [note.id]: false }));
+            setShowSavedNotesStates(prev => ({ ...prev, [note.id]: true }));
+
+            // Hide the "saved" indicator after 2 seconds
+            setTimeout(() => {
+                setShowSavedNotesStates(prev => ({ ...prev, [note.id]: false }));
+            }, 2000);
+        } catch (error) {
+            console.error('Failed to save note:', error);
+        } finally {
+            setSavingNotesStates(prev => ({ ...prev, [note.id]: false }));
+        }
+    };
+
+    // Clean up drafts when notes are removed
+    useEffect(() => {
+        const currentIds = new Set(normalizedNotes.items.map(n => n.id));
+        setNoteDrafts(prev => {
+            const cleaned = { ...prev };
+            Object.keys(cleaned).forEach(id => {
+                if (!currentIds.has(id)) {
+                    delete cleaned[id];
+                }
+            });
+            return cleaned;
+        });
+        setDirtyNotes(prev => {
+            const cleaned = { ...prev };
+            Object.keys(cleaned).forEach(id => {
+                if (!currentIds.has(id)) {
+                    delete cleaned[id];
+                }
+            });
+            return cleaned;
+        });
+    }, [normalizedNotes.items]);
+
+    // Track dirty notes count for tab indicator
+    const dirtyNotesCount = Object.values(dirtyNotes).filter(Boolean).length;
+
+    // Save all dirty notes
+    const handleSaveAllNotes = async () => {
+        const dirtyIds = Object.keys(dirtyNotes).filter(id => dirtyNotes[id]);
+        if (dirtyIds.length === 0) return;
+
+        // Set all dirty notes to saving state
+        setSavingNotesStates(prev => {
+            const newStates = { ...prev };
+            dirtyIds.forEach(id => { newStates[id] = true; });
+            return newStates;
+        });
+
+        try {
+            // Save all dirty notes
+            for (const id of dirtyIds) {
+                const draftText = noteDrafts[id];
+                if (draftText !== undefined) {
+                    await normalizedNotes.update(id, { body: draftText });
+                }
+            }
+
+            // Wait a bit for save to complete
+            await new Promise(resolve => setTimeout(resolve, 800));
+
+            // Clear all drafts and mark as clean
+            setNoteDrafts(prev => {
+                const newDrafts = { ...prev };
+                dirtyIds.forEach(id => { delete newDrafts[id]; });
+                return newDrafts;
+            });
+            setDirtyNotes(prev => {
+                const newDirty = { ...prev };
+                dirtyIds.forEach(id => { newDirty[id] = false; });
+                return newDirty;
+            });
+            setShowSavedNotesStates(prev => {
+                const newStates = { ...prev };
+                dirtyIds.forEach(id => { newStates[id] = true; });
+                return newStates;
+            });
+
+            // Hide saved indicators after 2 seconds
+            setTimeout(() => {
+                setShowSavedNotesStates(prev => {
+                    const newStates = { ...prev };
+                    dirtyIds.forEach(id => { newStates[id] = false; });
+                    return newStates;
+                });
+            }, 2000);
+
+        } catch (error) {
+            console.error('Failed to save notes:', error);
+        } finally {
+            setSavingNotesStates(prev => {
+                const newStates = { ...prev };
+                dirtyIds.forEach(id => { newStates[id] = false; });
+                return newStates;
+            });
+        }
+    };
+
+    // Discard all note changes
+    const handleDiscardAllNotes = () => {
+        const dirtyIds = Object.keys(dirtyNotes).filter(id => dirtyNotes[id]);
+        
+        // Clear all drafts and mark as clean
+        setNoteDrafts(prev => {
+            const newDrafts = { ...prev };
+            dirtyIds.forEach(id => { delete newDrafts[id]; });
+            return newDrafts;
+        });
+        setDirtyNotes(prev => {
+            const newDirty = { ...prev };
+            dirtyIds.forEach(id => { newDirty[id] = false; });
+            return newDirty;
+        });
+    };
+
+    // Tab save/discard handlers (after state variables are defined)
     const handleTabSaveChanges = useCallback(async (t: TabType) => {
         if (t === 'characters' && charactersSaveAllRef.current) return charactersSaveAllRef.current();
         if (t === 'chapters' && chaptersSaveAllRef.current) return chaptersSaveAllRef.current();
         if (t === 'locations' && locationsSaveAllRef.current) return locationsSaveAllRef.current();
-        if (t === 'notes') return saveAllNotes();
-    }, [saveAllNotes]);
+        if (t === 'notes') return handleSaveAllNotes();
+    }, [handleSaveAllNotes]);
+    
     const handleTabDiscardChanges = useCallback((t: TabType) => {
         if (t === 'characters') charactersDiscardAllRef.current?.();
         if (t === 'chapters') chaptersDiscardAllRef.current?.();
         if (t === 'locations') locationsDiscardAllRef.current?.();
-        if (t === 'notes') discardAllChanges();
-    }, [discardAllChanges]);
-
-    const handleCharactersUnsavedUpdate = useCallback((has: boolean, count: number) => setCharactersUnsaved({ hasChanges: has, count }), []);
-    const handleChaptersUnsavedUpdate = useCallback((has: boolean, count: number) => setChaptersUnsaved({ hasChanges: has, count }), []);
-    const handleLocationsUnsavedUpdate = useCallback((has: boolean, count: number) => setLocationsUnsaved({ hasChanges: has, count }), []);
-    // Legacy notes unsaved updates handled inline in NotesSection usage
-
-    const [tokenConfirm, setTokenConfirm] = useState<{ isOpen: boolean; estimate: TokenEstimate | null; action: string; onConfirm: () => void | Promise<void>; }>({ isOpen: false, estimate: null, action: '', onConfirm: () => { } });
-    const [isEditingTitle, setIsEditingTitle] = useState(false);
+        if (t === 'notes') handleDiscardAllNotes();
+    }, [handleDiscardAllNotes]);
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 p-4">
@@ -204,7 +362,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                         characters: charactersUnsaved,
                                         chapters: chaptersUnsaved,
                                         locations: locationsUnsaved,
-                                        notes: { hasChanges: hasUnsavedChanges, count: dirtyNoteIds.length }
+                                        notes: { hasChanges: dirtyNotesCount > 0, count: dirtyNotesCount }
                                     }}
                                     onSaveChanges={handleTabSaveChanges}
                                     onDiscardChanges={handleTabDiscardChanges}
@@ -295,28 +453,195 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                         />
                                     )}
                                     {tab === 'notes' && (
-                                        <NotesNormalizedSection
-                                            notes={bookNotes}
-                                            currentWindowEnd={local.window.end}
-                                            addNote={addNote}
-                                            updateDraft={updateDraft}
-                                            saveNote={saveNote}
-                                            cancelNote={cancelNote}
-                                            deleteNote={deleteNote}
-                                            reorderNotes={reorderNotes}
-                                            saveAllNotes={saveAllNotes}
-                                            discardAllChanges={discardAllChanges}
-                                            dirtyNoteIds={dirtyNoteIds}
-                                            hasUnsavedChanges={hasUnsavedChanges}
-                                            isLoading={notesLoading}
-                                            error={notesError}
-                                            tagColorMap={tagColorMap}
-                                            onPersistTagColor={upsertTag}
-                                            immediateUpdateNote={immediateUpdateNote}
-                                            onUnsavedChangesUpdate={() => { /* hook already supplies counts */ }}
-                                            onSaveAllRef={notesSaveAllRef}
-                                            onDiscardAllRef={notesDiscardAllRef}
-                                        />
+                                        <div className="space-y-6">
+                                            <div className="p-4 sm:p-6 bg-gray-50 rounded-xl border border-gray-200">
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="p-2 bg-orange-100 rounded-lg flex-shrink-0">
+                                                            <NotebookIcon size={20} className="text-orange-600" />
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="text-lg font-semibold text-gray-900">Notes ({normalizedNotes.items.length})</h4>
+                                                            <SaveStatus isSaving={isPersisting} lastSaved={lastSaved} error={persistError} className="mt-0.5" />
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        {dirtyNotesCount > 0 && (
+                                                            <>
+                                                                <Button
+                                                                    onClick={handleSaveAllNotes}
+                                                                    variant="secondary"
+                                                                    size="sm"
+                                                                    className="bg-emerald-600 text-white hover:bg-emerald-700"
+                                                                >
+                                                                    <SaveIcon size={14} />
+                                                                    Save All ({dirtyNotesCount})
+                                                                </Button>
+                                                                <Button
+                                                                    onClick={handleDiscardAllNotes}
+                                                                    variant="secondary"
+                                                                    size="sm"
+                                                                    className="bg-gray-600 text-white hover:bg-gray-700"
+                                                                >
+                                                                    <UndoIcon size={14} />
+                                                                    Discard All
+                                                                </Button>
+                                                            </>
+                                                        )}
+                                                        <Tooltip
+                                                            text="Use AI to automatically generate notes from your selected text"
+                                                            id="notes-ai-generate"
+                                                        >
+                                                            <Button
+                                                                onClick={() => confirmAIAction('generate notes', 'Analyze the provided text and create relevant notes', () => generateNotes())}
+                                                                isLoading={aiGenerationState.notes}
+                                                                variant="primary"
+                                                                className="w-full sm:w-auto"
+                                                            >
+                                                                <SparklesIcon size={16} />
+                                                                {aiGenerationState.notes ? 'Generating...' : 'AI Generate'}
+                                                            </Button>
+                                                        </Tooltip>
+                                                    </div>
+                                                </div>
+                                                
+                                                {/* Manual Add Note */}
+                                                <div className="flex flex-col sm:flex-row gap-3">
+                                                    <input
+                                                        type="text"
+                                                        value={newNoteName}
+                                                        onChange={(e) => setNewNoteName(e.target.value)}
+                                                        placeholder="Note title..."
+                                                        className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors"
+                                                        onKeyPress={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                normalizedNotes.create({
+                                                                    title: newNoteName.trim() || `Note ${normalizedNotes.items.length + 1}`,
+                                                                    body: '',
+                                                                    tags: [],
+                                                                    position: normalizedNotes.items.length * 1000,
+                                                                    spoilerProtected: false,
+                                                                    minVisiblePage: undefined,
+                                                                    groupId: null
+                                                                });
+                                                                setNewNoteName('');
+                                                            }
+                                                        }}
+                                                    />
+                                                    <Tooltip
+                                                        text="Add a new note to your book"
+                                                        id="add-note-button"
+                                                    >
+                                                        <Button
+                                                            onClick={() => {
+                                                                normalizedNotes.create({
+                                                                    title: newNoteName.trim() || `Note ${normalizedNotes.items.length + 1}`,
+                                                                    body: '',
+                                                                    tags: [],
+                                                                    position: normalizedNotes.items.length * 1000,
+                                                                    spoilerProtected: false,
+                                                                    minVisiblePage: undefined,
+                                                                    groupId: null
+                                                                });
+                                                                setNewNoteName('');
+                                                            }}
+                                                            variant="primary"
+                                                            className="w-full sm:w-auto"
+                                                        >
+                                                            <PlusIcon size={16} />
+                                                            Add Note
+                                                        </Button>
+                                                    </Tooltip>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-4">
+                                                {normalizedNotes.items.map((note, index) => {
+                                                    // Convert BookNote to BaseEntity format
+                                                    const noteEntity = {
+                                                        id: note.id,
+                                                        name: note.title || '',
+                                                        notes: note.body || '',
+                                                        tags: note.tags || []
+                                                    };
+                                                    
+                                                    return (
+                                                        <BaseEntityCard
+                                                            key={note.id}
+                                                            entity={noteEntity}
+                                                            index={index}
+                                                            totalCount={normalizedNotes.items.length}
+                                                            config={{
+                                                                entityType: 'note',
+                                                                icon: NotebookIcon,
+                                                                iconColor: 'orange',
+                                                                gradientFrom: 'orange',
+                                                                nameEditMode: 'pencil',
+                                                                placeholder: 'Write your note content here...'
+                                                            }}
+                                                            displayValue={getDisplayValue(note)}
+                                                            isDirty={dirtyNotes[note.id] || false}
+                                                            isSaving={savingNotesStates[note.id] || false}
+                                                            showSaved={showSavedNotesStates[note.id] || false}
+                                                            onUpdateEntity={(_, updated: any) => {
+                                                                normalizedNotes.update(note.id, {
+                                                                    title: updated.name,
+                                                                    body: updated.notes,
+                                                                    tags: updated.tags
+                                                                });
+                                                            }}
+                                                            onNotesChange={handleNoteNotesChange}
+                                                            onSave={handleSaveNote}
+                                                            onCancel={(note) => {
+                                                                setNoteDrafts(prev => {
+                                                                    const { [note.id]: _, ...rest } = prev;
+                                                                    return rest;
+                                                                });
+                                                                setDirtyNotes(prev => ({ ...prev, [note.id]: false }));
+                                                            }}
+                                                            onDelete={() => normalizedNotes.remove(note.id)}
+                                                            onMove={async (index: number, direction: 'up' | 'down') => {
+                                                                const ordered = [...normalizedNotes.items].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+                                                                const swapIndex = direction === 'up' ? index - 1 : index + 1;
+                                                                if (swapIndex < 0 || swapIndex >= ordered.length) return;
+                                                                const reorderedIds = [...ordered];
+                                                                [reorderedIds[index], reorderedIds[swapIndex]] = [reorderedIds[swapIndex], reorderedIds[index]];
+                                                                await normalizedNotes.reorder(reorderedIds.map(item => item.id));
+                                                            }}
+                                                            editingName={editingNoteName[note.id] || false}
+                                                            nameDraft={noteNameDrafts[note.id] ?? note.title}
+                                                            onStartNameEdit={() => {
+                                                                setNoteNameDrafts(prev => ({ ...prev, [note.id]: note.title || '' }));
+                                                                setEditingNoteName(prev => ({ ...prev, [note.id]: true }));
+                                                            }}
+                                                            onNameChange={(name) => setNoteNameDrafts(prev => ({ ...prev, [note.id]: name }))}
+                                                            onFinishNameEdit={(save) => {
+                                                                if (save) {
+                                                                    const newName = noteNameDrafts[note.id];
+                                                                    if (newName !== undefined && newName !== note.title) {
+                                                                        normalizedNotes.update(note.id, { title: newName });
+                                                                    }
+                                                                }
+                                                                setEditingNoteName(prev => ({ ...prev, [note.id]: false }));
+                                                                setNoteNameDrafts(prev => { const copy = { ...prev }; delete copy[note.id]; return copy; });
+                                                            }}
+                                                            tagColorMap={tagColorMap}
+                                                            onPersistTagColor={upsertTag}
+                                                        />
+                                                    );
+                                                })}
+
+                                                {normalizedNotes.items.length === 0 && (
+                                                    <div className="text-center py-12 text-gray-500">
+                                                        <div className="mb-4 flex justify-center">
+                                                            <NotebookIcon size={64} strokeWidth={1} className="text-gray-300" />
+                                                        </div>
+                                                        <p className="text-lg font-medium text-gray-700">No notes yet</p>
+                                                        <p className="text-sm text-gray-500">Add your first note above or use AI Generate</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
                             </div>

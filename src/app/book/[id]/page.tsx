@@ -46,20 +46,30 @@ export default function BookPage() {
                         .maybeSingle();
                     if (bookErr) throw bookErr;
                     if (!bookRow) { if (!cancelled) setLoading(false); return; }
-                    // Fetch sections
-                    const { data: sectionRows, error: secErr } = await supabaseClient
-                        .from('sections')
-                        .select('*')
-                        .eq('book_id', id);
-                    if (secErr) throw secErr;
-                    type SectionRow = { type: string; data: any };
-                    const sectionsMap: { characters: any[]; chapters: any[]; locations: any[]; notes: string } = { characters: [], chapters: [], locations: [], notes: '' };
-                    (sectionRows as SectionRow[] | null)?.forEach((r: SectionRow) => {
-                        if (r.type === 'characters') sectionsMap.characters = (r.data?.items) || [];
-                        if (r.type === 'chapters') sectionsMap.chapters = (r.data?.items) || [];
-                        if (r.type === 'locations') sectionsMap.locations = (r.data?.items) || [];
-                        if (r.type === 'notes') sectionsMap.notes = (r.data?.content) || '';
-                    });
+                    // Fetch normalized entities
+                    const [
+                        { data: characters, error: charErr },
+                        { data: chapters, error: chapErr },
+                        { data: locations, error: locErr },
+                        { data: notes, error: notesErr }
+                    ] = await Promise.all([
+                        supabaseClient.from('book_characters').select('*').eq('book_id', id),
+                        supabaseClient.from('book_chapters').select('*').eq('book_id', id),
+                        supabaseClient.from('book_locations').select('*').eq('book_id', id),
+                        supabaseClient.from('book_notes').select('*').eq('book_id', id)
+                    ]);
+
+                    if (charErr) throw charErr;
+                    if (chapErr) throw chapErr;
+                    if (locErr) throw locErr;
+                    if (notesErr) throw notesErr;
+
+                    const sectionsMap: { characters: any[]; chapters: any[]; locations: any[]; notes: any[] } = {
+                        characters: characters || [],
+                        chapters: chapters || [],
+                        locations: locations || [],
+                        notes: notes || []
+                    };
                     let uploads: any[] = [];
                     if (bookRow.pdf_path) {
                         try {

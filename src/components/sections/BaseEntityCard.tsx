@@ -176,21 +176,31 @@ export function BaseEntityCard<T extends BaseEntity>({
     }
 
     const color = newTagColorDraft || colorForTagName(raw, { ...tagColorMap, ...tagColorOverrides });
+
+    // Optimistic update: show tag immediately
     const updated = { ...entity, tags: [...(entity.tags || []), raw] } as T;
     onUpdateEntity(index, updated);
     setTagColorOverrides(prev => ({ ...prev, [raw]: color }));
-    // Persist chosen color if callback provided
-    if (onPersistTagColor) {
-      try {
-        await onPersistTagColor(raw, color);
-      } catch (e) {
-        // If persistence fails, keep local color override; optionally could surface toast
-        console.warn('Failed to persist tag color', e);
-      }
-    }
+
+    // Update UI state immediately for responsive feel
     setNewTagDraft('');
     setNewTagColorDraft('');
     setSwatchOpen(false);
+
+    // Persist color in background (don't wait for it)
+    if (onPersistTagColor) {
+      try {
+        const result = onPersistTagColor(raw, color);
+        // Handle promise if returned
+        if (result && typeof result.catch === 'function') {
+          result.catch((e: any) => {
+            console.warn('Failed to persist tag color', e);
+          });
+        }
+      } catch (e: any) {
+        console.warn('Failed to persist tag color', e);
+      }
+    }
 
     // Keep focus on input if present
     setTimeout(() => inputRef.current?.focus(), 0);
