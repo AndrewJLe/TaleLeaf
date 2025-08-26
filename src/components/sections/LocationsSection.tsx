@@ -23,6 +23,8 @@ interface LocationsSectionProps {
     // Expose save/discard functions for external triggers
     onSaveAllRef?: React.MutableRefObject<(() => Promise<void>) | null>;
     onDiscardAllRef?: React.MutableRefObject<(() => void) | null>;
+    tagColorMap?: Record<string, string>;
+    onPersistTagColor?: (name: string, color: string) => void | Promise<void>;
 }
 
 export const LocationsSection: React.FC<LocationsSectionProps> = ({
@@ -39,7 +41,9 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
     saveError = null,
     onUnsavedChangesUpdate,
     onSaveAllRef,
-    onDiscardAllRef
+    onDiscardAllRef,
+    tagColorMap = {},
+    onPersistTagColor
 }) => {
     const [newLocationName, setNewLocationName] = useState('');
 
@@ -243,13 +247,9 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
 
     // Expose functions to parent via refs
     useEffect(() => {
-        if (onSaveAllRef) {
-            onSaveAllRef.current = handleSaveAll;
-        }
-        if (onDiscardAllRef) {
-            onDiscardAllRef.current = handleDiscardAll;
-        }
-    });
+        if (onSaveAllRef) onSaveAllRef.current = handleSaveAll;
+        if (onDiscardAllRef) onDiscardAllRef.current = handleDiscardAll;
+    }, [onSaveAllRef, onDiscardAllRef, handleSaveAll]);
 
     const handleAddLocation = () => {
         if (!newLocationName.trim()) return;
@@ -382,6 +382,8 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
                             setEditingName(prev => ({ ...prev, [location.id]: false }));
                             setNameDrafts(prev => { const copy = { ...prev }; delete copy[location.id]; return copy; });
                         }}
+                        tagColorMap={tagColorMap}
+                        onPersistTagColor={onPersistTagColor}
                     />
                 ))}
 

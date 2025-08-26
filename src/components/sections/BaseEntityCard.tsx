@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '../ui/Button';
 import { ChevronDownIcon, ChevronUpIcon, SaveIcon, TrashIcon, UndoIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
@@ -48,6 +48,10 @@ interface BaseEntityCardProps<T extends BaseEntity> {
   onStartNameEdit?: () => void;
   onNameChange?: (name: string) => void;
   onFinishNameEdit?: (save: boolean) => void;
+
+  // Tag color persistence
+  tagColorMap?: Record<string, string>; // lowercased tag -> color
+  onPersistTagColor?: (tag: string, color: string) => Promise<void> | void;
 }
 
 // Tag system helpers (shared from CharactersSection)
@@ -122,11 +126,27 @@ export function BaseEntityCard<T extends BaseEntity>({
   onStartNameEdit,
   onNameChange,
   onFinishNameEdit
+  , tagColorMap = {}
+  , onPersistTagColor
 }: BaseEntityCardProps<T>) {
   // Local tag management state
   const [newTagDraft, setNewTagDraft] = useState('');
   const [newTagColorDraft, setNewTagColorDraft] = useState('');
-  const [tagColorOverrides, setTagColorOverrides] = useState<Record<string, string>>({});
+  const [tagColorOverrides, setTagColorOverrides] = useState<Record<string, string>>(tagColorMap);
+
+  // Sync local overrides when external map changes (e.g., after persistence)
+  useEffect(() => {
+    // Avoid unconditional state churn: only merge if incoming tagColorMap adds/changes values.
+    setTagColorOverrides(prev => {
+      if (!tagColorMap || Object.keys(tagColorMap).length === 0) return prev; // nothing new
+      let needsUpdate = false;
+      for (const [k, v] of Object.entries(tagColorMap)) {
+        if (prev[k] !== v) { needsUpdate = true; break; }
+      }
+      if (!needsUpdate) return prev; // prevent re-render loop when parent passes new object identity
+      return { ...tagColorMap, ...prev }; // preserve local overrides precedence
+    });
+  }, [tagColorMap]);
   const [swatchOpen, setSwatchOpen] = useState(false);
   const [addingTag, setAddingTag] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -148,17 +168,26 @@ export function BaseEntityCard<T extends BaseEntity>({
 
   const gradientClass = GRADIENT_CLASS_MAP[gradientFrom] || GRADIENT_CLASS_MAP['emerald'];
 
-  const handleCreateTag = () => {
+  const handleCreateTag = async () => {
     const raw = newTagDraft.trim().toLowerCase();
     if (!raw || !isValidTag(raw) || (entity.tags || []).includes(raw)) {
       setNewTagDraft('');
       return;
     }
 
-    const color = newTagColorDraft || colorForTagName(raw);
+    const color = newTagColorDraft || colorForTagName(raw, { ...tagColorMap, ...tagColorOverrides });
     const updated = { ...entity, tags: [...(entity.tags || []), raw] } as T;
     onUpdateEntity(index, updated);
     setTagColorOverrides(prev => ({ ...prev, [raw]: color }));
+    // Persist chosen color if callback provided
+    if (onPersistTagColor) {
+      try {
+        await onPersistTagColor(raw, color);
+      } catch (e) {
+        // If persistence fails, keep local color override; optionally could surface toast
+        console.warn('Failed to persist tag color', e);
+      }
+    }
     setNewTagDraft('');
     setNewTagColorDraft('');
     setSwatchOpen(false);
@@ -252,22 +281,26 @@ export function BaseEntityCard<T extends BaseEntity>({
         <div className="mt-2 basis-full">
           <div className="flex items-center justify-between">
             <div className="flex flex-wrap items-center gap-2">
-              {(entity.tags || []).map(tag => (
-                <div
-                  key={tag}
-                  className="inline-flex items-center rounded-full px-2 py-0.5 text-xs sm:text-sm font-medium transform transition-transform hover:scale-105 hover:[&>button]:opacity-100"
-                  style={{ backgroundColor: hexToRgba(colorForTagName(tag, tagColorOverrides), 0.6), color: readableTextColor(colorForTagName(tag, tagColorOverrides)) }}
-                >
-                  <span className="truncate max-w-[10rem]">{tag}</span>
-                  <button
-                    aria-label={`Remove tag ${tag}`}
-                    onClick={() => handleRemoveTag(tag)}
-                    className="ml-2 text-red-600 font-semibold text-xs sm:text-sm opacity-0 focus:opacity-100 focus:outline-none transition-all transform hover:scale-110 hover:font-bold hover:text-red-700 px-1"
+              {(entity.tags || []).map(tag => {
+                const lc = tag.toLowerCase();
+                const baseColor = tagColorOverrides[lc] || tagColorMap[lc] || colorForTagName(tag, { ...tagColorMap, ...tagColorOverrides });
+                return (
+                  <div
+                    key={tag}
+                    className="inline-flex items-center rounded-full px-2 py-0.5 text-xs sm:text-sm font-medium transform transition-transform hover:scale-105 hover:[&>button]:opacity-100"
+                    style={{ backgroundColor: hexToRgba(baseColor, 0.6), color: readableTextColor(baseColor) }}
                   >
-                    ×
-                  </button>
-                </div>
-              ))}
+                    <span className="truncate max-w-[10rem]">{tag}</span>
+                    <button
+                      aria-label={`Remove tag ${tag}`}
+                      onClick={() => handleRemoveTag(tag)}
+                      className="ml-2 text-red-600 font-semibold text-xs sm:text-sm opacity-0 focus:opacity-100 focus:outline-none transition-all transform hover:scale-110 hover:font-bold hover:text-red-700 px-1"
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
 
               {/* Add Tag button */}
               {!addingTag && (

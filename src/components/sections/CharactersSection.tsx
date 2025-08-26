@@ -23,6 +23,8 @@ interface CharactersSectionProps {
     // Expose save/discard functions for external triggers
     onSaveAllRef?: React.MutableRefObject<(() => Promise<void>) | null>;
     onDiscardAllRef?: React.MutableRefObject<(() => void) | null>;
+    tagColorMap?: Record<string, string>;
+    onPersistTagColor?: (name: string, color: string) => void | Promise<void>;
 }
 
 export const CharactersSection: React.FC<CharactersSectionProps> = ({
@@ -39,7 +41,9 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
     saveError = null,
     onUnsavedChangesUpdate,
     onSaveAllRef,
-    onDiscardAllRef
+    onDiscardAllRef,
+    tagColorMap = {},
+    onPersistTagColor
 }) => {
     const [newCharacterName, setNewCharacterName] = useState('');
 
@@ -378,6 +382,8 @@ export const CharactersSection: React.FC<CharactersSectionProps> = ({
                             setEditingName(prev => ({ ...prev, [character.id]: false }));
                             setNameDrafts(prev => { const copy = { ...prev }; delete copy[character.id]; return copy; });
                         }}
+                        tagColorMap={tagColorMap}
+                        onPersistTagColor={onPersistTagColor}
                     />
                 ))}
 

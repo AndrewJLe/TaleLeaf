@@ -30,7 +30,8 @@ function parseQueryFlags(): Partial<FeatureFlags> {
 // Get feature flag state (localStorage + query param overrides)
 function getFeatureFlags(): FeatureFlags {
   const defaults: FeatureFlags = {
-    notesV2: false,
+    // Enable normalized notes model by default now that book_notes table is live
+    notesV2: true,
     locationsV2: false,
     aiSummaries: false,
     collabPreview: false

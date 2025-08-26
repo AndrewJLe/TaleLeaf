@@ -28,10 +28,14 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
       }
     };
 
-    await upsertSection('characters', { items: sections.characters });
-    await upsertSection('chapters', { items: sections.chapters });
-    await upsertSection('locations', { items: sections.locations });
-    await upsertSection('notes', { content: sections.notes });
+    const normEntities = (arr: any[]) => (arr || []).map(e => ({
+      ...e,
+      tags: Array.isArray(e.tags) ? e.tags.map((t: any) => typeof t === 'string' ? t.toLowerCase() : t).filter(Boolean) : []
+    }));
+    await upsertSection('characters', { items: normEntities(sections.characters) });
+    await upsertSection('chapters', { items: normEntities(sections.chapters) });
+    await upsertSection('locations', { items: normEntities(sections.locations) });
+    await upsertSection('notes', { content: normEntities(sections.notes) });
 
     if (window) {
       const { error: winErr } = await supabase.from('books').update({ window_start: window.start, window_end: window.end }).eq('id', bookId);

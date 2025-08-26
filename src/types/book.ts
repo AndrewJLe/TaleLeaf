@@ -1,22 +1,42 @@
 export interface Character {
     id: string;
+    bookId?: string; // normalized table book_id
     name: string;
     notes: string;
-    tags: string[];
+    position?: number;
+    tags: string[]; // tag names (lowercase)
+    tagColors?: Record<string, string>; // resolved colors per tag (after override resolution)
+    createdAt?: string;
+    updatedAt?: string;
 }
 
 export interface Chapter {
     id: string;
-    name: string;
+    bookId?: string;
+    title?: string; // normalized title (renamed from name)
+    name: string; // legacy alias
     notes: string;
+    summary?: string;
+    analysis?: string;
+    position?: number;
     tags: string[];
+    tagColors?: Record<string, string>;
+    createdAt?: string;
+    updatedAt?: string;
 }
 
 export interface Location {
     id: string;
+    bookId?: string;
+    parentId?: string | null;
     name: string;
     notes: string;
+    position?: number;
+    depth?: number;
     tags: string[];
+    tagColors?: Record<string, string>;
+    createdAt?: string;
+    updatedAt?: string;
 }
 
 export interface Note {
@@ -36,6 +56,26 @@ export interface BookNote {
     position: number;
     spoilerProtected: boolean;
     minVisiblePage?: number;
+    groupId?: string | null; // optional grouping
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface BookTag {
+    id: string;
+    bookId: string;
+    name: string; // original case
+    color: string; // #RRGGBB
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface BookNoteGroup {
+    id: string;
+    bookId: string;
+    name: string;
+    color: string; // #RRGGBB
+    position: number | null;
     createdAt: string;
     updatedAt: string;
 }
@@ -115,4 +155,14 @@ export interface TooltipProps {
     text: string;
     children: React.ReactNode;
     id: string;
+}
+
+export interface BookTagAssign {
+    entityType: 'character' | 'chapter' | 'location' | 'note';
+    entityId: string;
+    tagId: string;
+    tagName: string;
+    color: string; // resolved color
+    overrideColor?: string | null;
+    taggedAt: string;
 }

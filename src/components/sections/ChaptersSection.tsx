@@ -23,6 +23,8 @@ interface ChaptersSectionProps {
     // Expose save/discard functions for external triggers
     onSaveAllRef?: React.MutableRefObject<(() => Promise<void>) | null>;
     onDiscardAllRef?: React.MutableRefObject<(() => void) | null>;
+    tagColorMap?: Record<string, string>;
+    onPersistTagColor?: (name: string, color: string) => void | Promise<void>;
 }
 
 export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
@@ -39,7 +41,9 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
     saveError = null,
     onUnsavedChangesUpdate,
     onSaveAllRef,
-    onDiscardAllRef
+    onDiscardAllRef,
+    tagColorMap = {},
+    onPersistTagColor
 }) => {
     const [newChapterName, setNewChapterName] = useState('');
 
@@ -393,6 +397,8 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
                             setEditingName(prev => ({ ...prev, [chapter.id]: false }));
                             setNameDrafts(prev => { const copy = { ...prev }; delete copy[chapter.id]; return copy; });
                         }}
+                        tagColorMap={tagColorMap}
+                        onPersistTagColor={onPersistTagColor}
                     />
                 ))}
 

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { BookNote } from '../../types/book';
+import React, { useMemo, useState } from 'react';
+import { BookNote, BookNoteGroup, BookTag } from '../../types/book';
 import { Button } from '../ui/Button';
-import { EyeIcon, EyeOffIcon, NotebookIcon, PlusIcon, SaveIcon, TagIcon, TrashIcon, UndoIcon } from '../ui/Icons';
+import { ChevronDownIcon, ChevronUpIcon, EyeIcon, EyeOffIcon, NotebookIcon, PlusIcon, SaveIcon, TagIcon, TrashIcon, UndoIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
 import { Tooltip } from '../ui/Tooltip';
 
@@ -21,6 +21,11 @@ interface NotesListProps {
   onSaveAllNotes?: () => Promise<void>;
   dirtyNoteIds?: string[];
   hasUnsavedChanges?: boolean;
+  // Tag & Group metadata
+  tagsMetadata?: BookTag[];
+  groups?: BookNoteGroup[];
+  onUpsertTag?: (name: string, color: string) => Promise<void>;
+  onUpsertGroup?: (g: { id?: string; name: string; color: string; position?: number }) => Promise<string | void>;
 }
 
 export const NotesList: React.FC<NotesListProps> = ({
@@ -38,8 +43,25 @@ export const NotesList: React.FC<NotesListProps> = ({
   onSaveNote,
   onSaveAllNotes,
   dirtyNoteIds = [],
-  hasUnsavedChanges = false
+  hasUnsavedChanges = false,
+  tagsMetadata = [],
+  groups = [],
+  onUpsertTag,
+  onUpsertGroup
 }) => {
+  // Quick lookup maps
+  const tagColorMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    tagsMetadata.forEach(t => { map[t.name.toLowerCase()] = t.color; });
+    return map;
+  }, [tagsMetadata]);
+
+  const groupMap = useMemo(() => {
+    const m: Record<string, BookNoteGroup> = {};
+    groups.forEach(g => { m[g.id] = g; });
+    return m;
+  }, [groups]);
+
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
 
   const toggleNoteExpansion = (noteId: string) => {
@@ -82,6 +104,18 @@ export const NotesList: React.FC<NotesListProps> = ({
     } else {
       await onUpdateNote(noteId, { tags });
     }
+
+    // Persist any new tag metadata with default color if not present
+    if (onUpsertTag) {
+      for (const tag of tags) {
+        if (!tagColorMap[tag.toLowerCase()]) {
+          // Simple deterministic fallback color selection
+          const palette = ['#F97316', '#EF4444', '#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#06B6D4', '#EC4899', '#6366F1', '#84CC16'];
+          const idx = Math.abs(tag.toLowerCase().split('').reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0)) % palette.length;
+          await onUpsertTag(tag, palette[idx]);
+        }
+      }
+    }
   };
 
   const handleUpdateNote = (noteId: string, updates: Partial<BookNote>) => {
@@ -112,6 +146,39 @@ export const NotesList: React.FC<NotesListProps> = ({
       </p>
     </div>
   );
+
+  // Move a note up or down and persist order if all notes are already saved
+  const handleMoveNote = async (noteId: string, direction: 'up' | 'down') => {
+    const ordered = [...notes].sort((a, b) => a.position - b.position);
+    const idx = ordered.findIndex(n => n.id === noteId);
+    if (idx === -1) return;
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= ordered.length) return;
+    // Swap
+    [ordered[idx], ordered[swapIdx]] = [ordered[swapIdx], ordered[idx]];
+    // Reassign sparse positions locally for snappy UI (0,1000,2000,...)
+    ordered.forEach((n, i) => {
+      const newPos = i * 1000;
+      if (n.position !== newPos) {
+        if (onUpdateDraft) {
+          onUpdateDraft(n.id, { position: newPos });
+        } else {
+          // immediate optimistic update path
+          onUpdateNote(n.id, { position: newPos });
+        }
+      }
+    });
+    // Only persist reorder if all notes have real IDs (no temp unsaved IDs)
+    const hasTemp = ordered.some(n => n.id.startsWith('temp-'));
+    if (!hasTemp) {
+      try {
+        await onReorderNotes(ordered.map(n => n.id));
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('Reorder failed', e);
+      }
+    }
+  };
 
   if (error) {
     return (
@@ -224,16 +291,62 @@ export const NotesList: React.FC<NotesListProps> = ({
                         {note.tags.map((tag, index) => (
                           <span
                             key={index}
-                            className="inline-block bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded-full"
+                            className="inline-block text-xs px-2 py-1 rounded-full border"
+                            style={{
+                              backgroundColor: (tagColorMap[tag.toLowerCase()] || '#fed7aa') + '22',
+                              color: tagColorMap[tag.toLowerCase()] || '#9a3412',
+                              borderColor: (tagColorMap[tag.toLowerCase()] || '#fdba74')
+                            }}
                           >
                             {tag}
                           </span>
                         ))}
                       </div>
                     )}
+
+                    {/* Group selector */}
+                    <div className="flex items-center gap-2 mt-2">
+                      <label className="text-xs text-gray-500">Group:</label>
+                      <select
+                        value={note.groupId || ''}
+                        onChange={(e) => handleUpdateNote(note.id, { groupId: e.target.value || null })}
+                        className="text-xs border border-gray-200 rounded px-2 py-1 focus:ring-2 focus:ring-orange-500"
+                      >
+                        <option value="">None</option>
+                        {groups.map(g => (
+                          <option key={g.id} value={g.id}>{g.name}</option>
+                        ))}
+                      </select>
+                      {note.groupId && groupMap[note.groupId] && (
+                        <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full border" style={{ backgroundColor: groupMap[note.groupId].color + '22', color: groupMap[note.groupId].color, borderColor: groupMap[note.groupId].color }}>
+                          {groupMap[note.groupId].name}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2 ml-4">
+                    {/* Reorder Controls */}
+                    <div className="flex flex-col mr-1">
+                      <button
+                        type="button"
+                        aria-label="Move note up"
+                        disabled={notes.findIndex(n => n.id === note.id) === 0}
+                        onClick={() => handleMoveNote(note.id, 'up')}
+                        className="p-1 text-gray-400 hover:text-orange-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <ChevronUpIcon size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Move note down"
+                        disabled={notes.findIndex(n => n.id === note.id) === notes.length - 1}
+                        onClick={() => handleMoveNote(note.id, 'down')}
+                        className="p-1 text-gray-400 hover:text-orange-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <ChevronDownIcon size={14} />
+                      </button>
+                    </div>
                     {/* Save/Cancel for dirty notes */}
                     {dirtyNoteIds.includes(note.id) && (
                       <>
