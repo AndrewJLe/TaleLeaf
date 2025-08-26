@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Note } from '../../types/book';
 import { Button } from '../ui/Button';
-import { ChevronDownIcon, ChevronUpIcon, NotebookIcon, PlusIcon, SaveIcon, SparklesIcon, TagIcon, TrashIcon, UndoIcon } from '../ui/Icons';
-import { ResizableTextArea } from '../ui/ResizableTextArea';
-import { SaveStateIndicator } from '../ui/SaveStateIndicator';
+import { NotebookIcon, PlusIcon, SaveIcon, SparklesIcon, UndoIcon } from '../ui/Icons';
 import { SaveStatus } from '../ui/SaveStatus';
 import { Tooltip } from '../ui/Tooltip';
+import { BaseEntityCard, EntityCardConfig } from './BaseEntityCard';
 
 interface NotesSectionProps {
     notes: Note[];
@@ -49,9 +48,23 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
     const [dirty, setDirty] = useState<Record<string, boolean>>({});
     const [savingStates, setSavingStates] = useState<Record<string, boolean>>({});
     const [showSavedStates, setShowSavedStates] = useState<Record<string, boolean>>({});
+    // Local state for inline name editing
+    const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
+    const [editingName, setEditingName] = useState<Record<string, boolean>>({});
+
+    // Entity card configuration
+    const cardConfig: EntityCardConfig = {
+        entityType: 'note',
+        icon: NotebookIcon,
+        iconColor: 'orange',
+        gradientFrom: 'orange',
+        nameEditMode: 'pencil',
+        placeholder: 'Write your note content here...'
+    };
 
     // Create note lookup map for easy access
     const noteMap = React.useMemo(() => {
+        if (!notes) return {};
         return notes.reduce((acc, note, index) => {
             acc[note.id] = { note, index };
             return acc;
@@ -60,6 +73,7 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
 
     // Clean up drafts when notes are removed
     useEffect(() => {
+        if (!notes) return;
         const currentIds = new Set(notes.map(n => n.id));
         setDrafts(prev => {
             const cleaned = { ...prev };
@@ -87,26 +101,12 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
     };
 
     // Track changes for individual notes
-    const handleNoteContentChange = (note: Note, content: string) => {
+    const handleNoteNotesChange = (note: Note, content: string) => {
         setDrafts(prev => ({ ...prev, [note.id]: content }));
         setDirty(prev => ({
             ...prev,
             [note.id]: content !== note.notes
         }));
-    };
-
-    // Handle tags update
-    const handleUpdateTags = (index: number, note: Note, tagsText: string) => {
-        // Parse comma-separated tags, clean up whitespace, dedupe case-insensitive
-        const tags = tagsText
-            .split(',')
-            .map(tag => tag.trim())
-            .filter(tag => tag.length > 0)
-            .filter((tag, idx, arr) =>
-                arr.findIndex(t => t.toLowerCase() === tag.toLowerCase()) === idx
-            );
-
-        onUpdateNote(index, { ...note, tags });
     };
 
     // Save individual note
@@ -163,7 +163,7 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
         try {
             if (onBatchUpdateNotes) {
                 // Use the batch update method - this prevents race conditions
-                const updatedNotes = notes.map(note =>
+                const updatedNotes = (notes || []).map(note =>
                     dirty[note.id] ? { ...note, notes: drafts[note.id] } : note
                 );
 
@@ -172,11 +172,10 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
                 // Fallback to sequential individual updates with delays
                 for (let i = 0; i < dirtyIds.length; i++) {
                     const id = dirtyIds[i];
-                    const noteIndex = notes.findIndex(note => note.id === id);
-
-                    if (noteIndex !== -1 && drafts[id] !== undefined) {
-                        await onUpdateNote(noteIndex, {
-                            ...notes[noteIndex],
+                    const noteInfo = noteMap[id];
+                    if (noteInfo && drafts[id] !== undefined) {
+                        await onUpdateNote(noteInfo.index, {
+                            ...noteInfo.note,
                             notes: drafts[id]
                         });
 
@@ -228,15 +227,6 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
         }
     };
 
-    // Cancel individual note changes
-    const handleCancelNote = (note: Note) => {
-        setDrafts(prev => {
-            const { [note.id]: _, ...rest } = prev;
-            return rest;
-        });
-        setDirty(prev => ({ ...prev, [note.id]: false }));
-    };
-
     // Discard all changes
     const handleDiscardAll = () => {
         setDrafts({});
@@ -266,6 +256,7 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
         onAddNote({ name: newNoteName.trim(), notes: '', tags: [] });
         setNewNoteName('');
     };
+
     return (
         <div className="space-y-6">
             <div className="p-4 sm:p-6 bg-gray-50 rounded-xl border border-gray-200">
@@ -275,8 +266,13 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
                             <NotebookIcon size={20} className="text-orange-600" />
                         </div>
                         <div>
-                            <h4 className="text-lg font-semibold text-gray-900">Notes ({notes.length})</h4>
-                            <SaveStatus isSaving={isSaving} lastSaved={lastSaved} error={saveError} className="mt-0.5" />
+                            <h4 className="text-lg font-semibold text-gray-900">Notes ({(notes || []).length})</h4>
+                            <SaveStatus
+                                isSaving={isSaving}
+                                lastSaved={lastSaved}
+                                error={saveError}
+                                className="mt-0.5"
+                            />
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -320,20 +316,23 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
                 </div>
 
                 {/* Manual Add Note */}
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                     <input
                         type="text"
                         value={newNoteName}
                         onChange={(e) => setNewNoteName(e.target.value)}
                         placeholder="Note title..."
-                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors"
                         onKeyPress={(e) => e.key === 'Enter' && handleAddNote()}
                     />
-                    <Tooltip text="Add note to your list" id="add-note">
+                    <Tooltip
+                        text="Add a new note to your book"
+                        id="add-note-button"
+                    >
                         <Button
                             onClick={handleAddNote}
                             variant="primary"
-                            disabled={!newNoteName.trim()}
+                            className="w-full sm:w-auto"
                         >
                             <PlusIcon size={16} />
                             Add Note
@@ -343,171 +342,50 @@ export const NotesSection: React.FC<NotesSectionProps> = ({
             </div>
 
             <div className="space-y-4">
-                {notes.map((note, index) => (
-                    <div key={note.id} className="p-4 sm:p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
-                        <div className="space-y-4">
-                            {/* Title Row */}
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center relative flex-shrink-0">
-                                    <NotebookIcon size={18} className="text-orange-600" />
-                                    {dirty[note.id] && (
-                                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white"></div>
-                                    )}
-                                </div>
-                                <input
-                                    type="text"
-                                    value={note.name}
-                                    onChange={(e) => onUpdateNote(index, { ...note, name: e.target.value })}
-                                    className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-orange-500 rounded-lg px-3 py-1 -mx-3 flex-1 min-w-0"
-                                    placeholder="Note title"
-                                />
-                            </div>
-
-                            {/* Actions Row - Responsive Layout */}
-                            <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-                                {/* Primary Actions - Save, Cancel and Status */}
-                                <div className="flex items-center gap-2 order-2 sm:order-1">
-                                    <button
-                                        onClick={() => handleSaveNote(note)}
-                                        disabled={savingStates[note.id] || !dirty[note.id]}
-                                        className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 ${savingStates[note.id]
-                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                            : dirty[note.id]
-                                                ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
-                                                : 'bg-emerald-100 text-emerald-700 cursor-default'
-                                            }`}
-                                        title="Ctrl+Enter to save"
-                                    >
-                                        <SaveIcon size={14} />
-                                        <span className="hidden sm:inline">
-                                            {savingStates[note.id] ? 'Saving...' : 'Save'}
-                                        </span>
-                                    </button>
-
-                                    {dirty[note.id] && (
-                                        <Tooltip text="Cancel changes and revert to saved version" id={`cancel-note-${note.id}`}>
-                                            <Button
-                                                onClick={() => handleCancelNote(note)}
-                                                variant="secondary"
-                                                size="sm"
-                                                className="bg-gray-200 text-gray-800 hover:bg-gray-300"
-                                            >
-                                                <UndoIcon size={14} />
-                                                <span className="hidden sm:inline">Cancel</span>
-                                            </Button>
-                                        </Tooltip>
-                                    )}
-
-                                    <SaveStateIndicator
-                                        isSaving={savingStates[note.id] || false}
-                                        hasUnsavedChanges={dirty[note.id] || false}
-                                        showSaved={showSavedStates[note.id] || false}
-                                    />
-                                </div>
-
-                                {/* Secondary Actions - Navigation and Tools */}
-                                <div className="flex items-center gap-2 order-1 sm:order-2">
-                                    <div className="flex items-center gap-1">
-                                        <Tooltip
-                                            text="Move this note up in the order"
-                                            id={`note-up-${note.id}`}
-                                        >
-                                            <Button
-                                                onClick={() => onMoveNote(index, 'up')}
-                                                variant="ghost"
-                                                size="sm"
-                                                disabled={index === 0}
-                                            >
-                                                <ChevronUpIcon size={14} />
-                                            </Button>
-                                        </Tooltip>
-                                        <Tooltip
-                                            text="Move this note down in the order"
-                                            id={`note-down-${note.id}`}
-                                        >
-                                            <Button
-                                                onClick={() => onMoveNote(index, 'down')}
-                                                variant="ghost"
-                                                size="sm"
-                                                disabled={index === notes.length - 1}
-                                            >
-                                                <ChevronDownIcon size={14} />
-                                            </Button>
-                                        </Tooltip>
-                                    </div>
-
-                                    <div className="w-px h-6 bg-gray-200"></div>
-
-                                    <Tooltip
-                                        text="Remove this note from your list"
-                                        id={`delete-note-${note.id}`}
-                                    >
-                                        <Button
-                                            onClick={() => onDeleteNote(index)}
-                                            variant="danger"
-                                            size="sm"
-                                        >
-                                            <TrashIcon size={14} />
-                                        </Button>
-                                    </Tooltip>
-                                </div>
-                            </div>
-
-                            {/* Tags Section */}
-                            <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                    <TagIcon size={16} className="text-gray-400" />
-                                    <input
-                                        type="text"
-                                        value={note.tags?.join(', ') || ''}
-                                        onChange={(e) => handleUpdateTags(index, note, e.target.value)}
-                                        onKeyPress={(e) => {
-                                            if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                handleUpdateTags(index, note, e.currentTarget.value);
-                                            }
-                                        }}
-                                        placeholder="Tags (comma-separated)..."
-                                        className="text-sm text-gray-600 bg-transparent border border-gray-200 rounded-md px-2 py-1 focus:ring-2 focus:ring-orange-500 focus:border-transparent flex-1"
-                                    />
-                                </div>
-
-                                {/* Tag chips display */}
-                                {note.tags && note.tags.length > 0 && (
-                                    <div className="flex flex-wrap gap-1">
-                                        {note.tags.map((tag, tagIndex) => (
-                                            <span
-                                                key={tagIndex}
-                                                className="inline-block bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded-full"
-                                            >
-                                                {tag}
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-sm text-gray-600 font-medium">Note Content</label>
-                                <ResizableTextArea
-                                    value={getDisplayValue(note)}
-                                    onChange={(content) => handleNoteContentChange(note, content)}
-                                    onSave={() => handleSaveNote(note)}
-                                    placeholder="Write your note content here..."
-                                    minRows={3}
-                                    maxRows={15}
-                                />
-                                {dirty[note.id] && (
-                                    <p className="text-xs text-gray-500">
-                                        Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> or click Save to save your changes
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                    </div>
+                {(notes || []).map((note, index) => (
+                    <BaseEntityCard
+                        key={note.id}
+                        entity={note}
+                        index={index}
+                        totalCount={(notes || []).length}
+                        config={cardConfig}
+                        displayValue={getDisplayValue(note)}
+                        isDirty={dirty[note.id] || false}
+                        isSaving={savingStates[note.id] || false}
+                        showSaved={showSavedStates[note.id] || false}
+                        onUpdateEntity={onUpdateNote}
+                        onNotesChange={handleNoteNotesChange}
+                        onSave={handleSaveNote}
+                        onCancel={(note) => {
+                            setDrafts(prev => {
+                                const { [note.id]: _, ...rest } = prev;
+                                return rest;
+                            });
+                            setDirty(prev => ({ ...prev, [note.id]: false }));
+                        }}
+                        onMove={onMoveNote}
+                        onDelete={onDeleteNote}
+                        editingName={editingName[note.id] || false}
+                        nameDraft={nameDrafts[note.id] ?? note.name}
+                        onStartNameEdit={() => {
+                            setNameDrafts(prev => ({ ...prev, [note.id]: note.name }));
+                            setEditingName(prev => ({ ...prev, [note.id]: true }));
+                        }}
+                        onNameChange={(name) => setNameDrafts(prev => ({ ...prev, [note.id]: name }))}
+                        onFinishNameEdit={(save) => {
+                            if (save) {
+                                const newName = nameDrafts[note.id];
+                                if (newName !== undefined && newName !== note.name) {
+                                    onUpdateNote(index, { ...note, name: newName });
+                                }
+                            }
+                            setEditingName(prev => ({ ...prev, [note.id]: false }));
+                            setNameDrafts(prev => { const copy = { ...prev }; delete copy[note.id]; return copy; });
+                        }}
+                    />
                 ))}
 
-                {notes.length === 0 && (
+                {(notes || []).length === 0 && (
                     <div className="text-center py-12 text-gray-500">
                         <div className="mb-4 flex justify-center">
                             <NotebookIcon size={64} strokeWidth={1} className="text-gray-300" />

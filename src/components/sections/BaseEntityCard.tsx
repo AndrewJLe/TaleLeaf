@@ -1,0 +1,460 @@
+import React, { useRef, useState } from 'react';
+import { Button } from '../ui/Button';
+import { ChevronDownIcon, ChevronUpIcon, SaveIcon, TrashIcon, UndoIcon } from '../ui/Icons';
+import { ResizableTextArea } from '../ui/ResizableTextArea';
+import { SaveStateIndicator } from '../ui/SaveStateIndicator';
+import { Tooltip } from '../ui/Tooltip';
+
+export interface BaseEntity {
+  id: string;
+  name: string;
+  notes: string;
+  tags: string[];
+}
+
+export interface EntityCardConfig {
+  entityType: string; // 'character' | 'chapter' | 'location' | 'note'
+  icon: React.ComponentType<{ size: number; className?: string }>;
+  iconColor: string; // e.g., 'amber' | 'green' | 'purple' | 'orange'
+  gradientFrom: string; // e.g., 'emerald' for 'from-emerald-100'
+  nameEditMode?: 'inline' | 'pencil'; // default 'inline'
+  placeholder: string; // placeholder for description text area
+  showSpecialActions?: React.ReactNode; // optional custom actions for specific entity types
+}
+
+interface BaseEntityCardProps<T extends BaseEntity> {
+  entity: T;
+  index: number;
+  totalCount: number;
+  config: EntityCardConfig;
+
+  // State management
+  displayValue: string;
+  isDirty: boolean;
+  isSaving: boolean;
+  showSaved: boolean;
+
+  // Callbacks
+  onUpdateEntity: (index: number, entity: T) => void;
+  onNotesChange: (entity: T, notes: string) => void;
+  onSave: (entity: T) => void;
+  onCancel: (entity: T) => void;
+  onMove: (index: number, direction: 'up' | 'down') => void;
+  onDelete: (index: number) => void;
+
+  // Name editing state (for pencil mode)
+  editingName?: boolean;
+  nameDraft?: string;
+  onStartNameEdit?: () => void;
+  onNameChange?: (name: string) => void;
+  onFinishNameEdit?: (save: boolean) => void;
+}
+
+// Tag system helpers (shared from CharactersSection)
+const TAG_PALETTE = [
+  '#F97316', // orange
+  '#EF4444', // red
+  '#10B981', // emerald
+  '#3B82F6', // blue
+  '#8B5CF6', // violet
+  '#F59E0B', // amber
+  '#06B6D4', // teal
+  '#EC4899', // pink
+  '#6366F1', // indigo
+  '#84CC16'  // lime
+];
+
+const hashString = (s: string) => {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h << 5) - h + s.charCodeAt(i);
+    h |= 0;
+  }
+  return Math.abs(h);
+};
+
+const colorForTagName = (tag: string, overrides: Record<string, string> = {}) => {
+  if (overrides[tag]) return overrides[tag];
+  const idx = hashString(tag) % TAG_PALETTE.length;
+  return TAG_PALETTE[idx];
+};
+
+const luminance = (hex: string) => {
+  const c = hex.replace('#', '');
+  const r = parseInt(c.substring(0, 2), 16) / 255;
+  const g = parseInt(c.substring(2, 4), 16) / 255;
+  const b = parseInt(c.substring(4, 6), 16) / 255;
+  const a = [r, g, b].map(v => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+  return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
+};
+
+const readableTextColor = (bgHex: string) => {
+  return luminance(bgHex) > 0.5 ? '#111827' : '#ffffff';
+};
+
+const hexToRgba = (hex: string, alpha = 0.6) => {
+  const c = hex.replace('#', '');
+  const r = parseInt(c.substring(0, 2), 16);
+  const g = parseInt(c.substring(2, 4), 16);
+  const b = parseInt(c.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const isValidTag = (t: string) => /^[a-z0-9]+$/.test(t);
+
+export function BaseEntityCard<T extends BaseEntity>({
+  entity,
+  index,
+  totalCount,
+  config,
+  displayValue,
+  isDirty,
+  isSaving,
+  showSaved,
+  onUpdateEntity,
+  onNotesChange,
+  onSave,
+  onCancel,
+  onMove,
+  onDelete,
+  editingName = false,
+  nameDraft = '',
+  onStartNameEdit,
+  onNameChange,
+  onFinishNameEdit
+}: BaseEntityCardProps<T>) {
+  // Local tag management state
+  const [newTagDraft, setNewTagDraft] = useState('');
+  const [newTagColorDraft, setNewTagColorDraft] = useState('');
+  const [tagColorOverrides, setTagColorOverrides] = useState<Record<string, string>>({});
+  const [swatchOpen, setSwatchOpen] = useState(false);
+  const [addingTag, setAddingTag] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const { icon: Icon, iconColor, gradientFrom, nameEditMode = 'inline', placeholder, showSpecialActions } = config;
+
+  const handleCreateTag = () => {
+    const raw = newTagDraft.trim().toLowerCase();
+    if (!raw || !isValidTag(raw) || (entity.tags || []).includes(raw)) {
+      setNewTagDraft('');
+      return;
+    }
+
+    const color = newTagColorDraft || colorForTagName(raw);
+    const updated = { ...entity, tags: [...(entity.tags || []), raw] } as T;
+    onUpdateEntity(index, updated);
+    setTagColorOverrides(prev => ({ ...prev, [raw]: color }));
+    setNewTagDraft('');
+    setNewTagColorDraft('');
+    setSwatchOpen(false);
+
+    // Keep focus on input if present
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
+  const handleRemoveTag = (tag: string) => {
+    const updated = { ...entity, tags: (entity.tags || []).filter(t => t !== tag) } as T;
+    onUpdateEntity(index, updated);
+  };
+
+  const renderNameField = () => {
+    if (nameEditMode === 'pencil' && !editingName) {
+      return (
+        <div className="flex items-center gap-2 w-full">
+          <div className="font-semibold text-gray-900 text-lg truncate">{entity.name || `${config.entityType} name`}</div>
+          <Tooltip text={`Edit ${config.entityType} name`} id={`edit-${config.entityType}-name-${entity.id}`}>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onStartNameEdit?.(); }}
+              className="ml-1 p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700 focus:outline-none opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-opacity"
+              aria-label={`Edit name for ${entity.name}`}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="currentColor" />
+                <path d="M20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z" fill="currentColor" />
+              </svg>
+            </button>
+          </Tooltip>
+        </div>
+      );
+    }
+
+    if (nameEditMode === 'pencil' && editingName) {
+      return (
+        <input
+          autoFocus
+          type="text"
+          value={nameDraft}
+          onChange={(e) => onNameChange?.(e.target.value)}
+          onBlur={() => onFinishNameEdit?.(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              onFinishNameEdit?.(true);
+            } else if (e.key === 'Escape') {
+              onFinishNameEdit?.(false);
+            }
+          }}
+          className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-lg px-3 py-1 w-full"
+        />
+      );
+    }
+
+    // Default inline editing
+    return (
+      <input
+        type="text"
+        value={entity.name}
+        onChange={(e) => onUpdateEntity(index, { ...entity, name: e.target.value } as T)}
+        className={`font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-${iconColor}-500 rounded-lg px-3 py-1 -mx-3 flex-1 min-w-0`}
+        placeholder={`${config.entityType} name`}
+      />
+    );
+  };
+
+  return (
+    <div className={`group relative overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-${gradientFrom}-100 to-white border border-${gradientFrom}-100 hover:border-2 hover:border-${gradientFrom}-400 rounded-xl shadow-sm hover:shadow-md transition-all duration-200`}>
+      <div className="space-y-4">
+        {/* Title Row */}
+        <div className="flex items-center gap-3">
+          <div
+            className={`w-10 h-10 rounded-lg bg-${iconColor}-100 flex items-center justify-center relative flex-shrink-0 transition-transform transform hover:scale-105 active:scale-95 cursor-pointer`}
+            role="button"
+            tabIndex={0}
+            onClick={() => { /* TODO: open entity details modal */ }}
+          >
+            <Icon size={18} className={`text-${iconColor}-600`} />
+            {isDirty && (
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white"></div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 flex-1 min-w-0 group">
+            {renderNameField()}
+          </div>
+        </div>
+
+        {/* Tags */}
+        <div className="mt-2 basis-full">
+          <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              {(entity.tags || []).map(tag => (
+                <div
+                  key={tag}
+                  className="inline-flex items-center rounded-full px-2 py-0.5 text-xs sm:text-sm font-medium transform transition-transform hover:scale-105 hover:[&>button]:opacity-100"
+                  style={{ backgroundColor: hexToRgba(colorForTagName(tag, tagColorOverrides), 0.6), color: readableTextColor(colorForTagName(tag, tagColorOverrides)) }}
+                >
+                  <span className="truncate max-w-[10rem]">{tag}</span>
+                  <button
+                    aria-label={`Remove tag ${tag}`}
+                    onClick={() => handleRemoveTag(tag)}
+                    className="ml-2 text-red-600 font-semibold text-xs sm:text-sm opacity-0 focus:opacity-100 focus:outline-none transition-all transform hover:scale-110 hover:font-bold hover:text-red-700 px-1"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+
+              {/* Add Tag button */}
+              {!addingTag && (
+                <Tooltip text="Add tag" id={`add-tag-${entity.id}`}>
+                  <button
+                    onClick={() => { setAddingTag(true); setTimeout(() => inputRef.current?.focus(), 0); }}
+                    className="inline-flex items-center justify-center rounded-full px-2 py-0.5 bg-emerald-200/40 text-emerald-500 text-sm border border-white/20 hover:bg-emerald-200/80 hover:scale-105 transition-all shadow-sm"
+                    aria-label="Add tag"
+                  >
+                    <span className="text-sm">+</span>
+                    <span aria-hidden className="ml-1 text-xs">🏷️</span>
+                  </button>
+                </Tooltip>
+              )}
+            </div>
+
+            <div>
+              {addingTag && (
+                <button
+                  onClick={() => { setAddingTag(false); setNewTagDraft(''); setNewTagColorDraft(''); }}
+                  className="px-3 py-1 rounded-md bg-gray-50 border border-gray-200 text-sm text-gray-600 hover:bg-gray-100 hover:shadow-sm transition-all"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          </div>
+
+          {addingTag && (
+            <div className="mt-2 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <input
+                  ref={inputRef}
+                  value={newTagDraft}
+                  onChange={(e) => {
+                    const sanitized = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    setNewTagDraft(sanitized);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const raw = newTagDraft.trim().toLowerCase();
+                      if (isValidTag(raw)) {
+                        e.preventDefault();
+                        handleCreateTag();
+                      }
+                    } else if (e.key === 'Escape') {
+                      setAddingTag(false);
+                    }
+                  }}
+                  placeholder="add tag here"
+                  className="px-3 py-2 sm:py-1 border border-gray-200 rounded-lg bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 transition-colors duration-150 w-full sm:w-auto"
+                />
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setSwatchOpen(!swatchOpen)}
+                  className="px-2 sm:px-3 py-2 sm:py-1 bg-white border border-gray-200 rounded-lg shadow-sm text-sm hover:scale-105 transition-transform flex items-center gap-1"
+                  title="Pick tag color"
+                >
+                  <span className="text-lg">🎨</span>
+                  <span className="hidden sm:inline text-xs text-gray-600">Color</span>
+                </button>
+                <button
+                  onClick={handleCreateTag}
+                  disabled={!isValidTag(newTagDraft.trim().toLowerCase())}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors ${isValidTag(newTagDraft.trim().toLowerCase()) ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                >
+                  Create
+                </button>
+              </div>
+
+              {swatchOpen && (
+                <div className="w-full">
+                  <div className="flex items-center gap-2 flex-wrap mt-1">
+                    {TAG_PALETTE.map(col => (
+                      <button
+                        key={col}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => setNewTagColorDraft(col)}
+                        className={`w-5 h-5 rounded-full transform transition-transform hover:scale-110 focus:scale-110 outline-none ${newTagColorDraft === col ? 'ring-4 ring-emerald-200' : 'ring-2 ring-transparent'}`}
+                        style={{ backgroundColor: col }}
+                        aria-label={`Select ${col}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Actions Row */}
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+          {/* Primary Actions - Save and Status */}
+          <div className="flex items-center gap-2 order-2 sm:order-1">
+            <button
+              onClick={() => onSave(entity)}
+              disabled={isSaving || !isDirty}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 ${isSaving
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : isDirty
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
+                  : 'bg-emerald-100 text-emerald-700 cursor-default'
+                }`}
+              title="Ctrl+Enter to save"
+            >
+              <SaveIcon size={14} />
+              <span className="hidden sm:inline">
+                {isSaving ? 'Saving...' : 'Save'}
+              </span>
+            </button>
+            {isDirty && (
+              <Button
+                onClick={() => onCancel(entity)}
+                variant="secondary"
+                size="sm"
+                className="bg-gray-200 text-gray-800 hover:bg-gray-300"
+              >
+                <UndoIcon size={14} />
+                <span className="hidden sm:inline">Cancel</span>
+              </Button>
+            )}
+            <SaveStateIndicator
+              isSaving={isSaving}
+              showSaved={showSaved}
+              hasUnsavedChanges={isDirty}
+            />
+          </div>
+
+          {/* Secondary Actions - Navigation and Tools */}
+          <div className="flex items-center gap-2 order-1 sm:order-2">
+            {showSpecialActions}
+
+            <div className="flex items-center gap-1">
+              <Tooltip
+                text={`Move this ${config.entityType} up in the order`}
+                id={`${config.entityType}-up-${entity.id}`}
+              >
+                <Button
+                  onClick={() => onMove(index, 'up')}
+                  variant="ghost"
+                  size="sm"
+                  disabled={index === 0}
+                >
+                  <ChevronUpIcon size={14} />
+                </Button>
+              </Tooltip>
+              <Tooltip
+                text={`Move this ${config.entityType} down in the order`}
+                id={`${config.entityType}-down-${entity.id}`}
+              >
+                <Button
+                  onClick={() => onMove(index, 'down')}
+                  variant="ghost"
+                  size="sm"
+                  disabled={index === totalCount - 1}
+                >
+                  <ChevronDownIcon size={14} />
+                </Button>
+              </Tooltip>
+            </div>
+
+            <div className="w-px h-6 bg-gray-200"></div>
+
+            <Tooltip
+              text={`Remove this ${config.entityType} from your list`}
+              id={`delete-${config.entityType}-${entity.id}`}
+            >
+              <Button
+                onClick={() => onDelete(index)}
+                variant="danger"
+                size="sm"
+              >
+                <TrashIcon size={14} />
+              </Button>
+            </Tooltip>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm text-gray-600 font-medium">{config.entityType.charAt(0).toUpperCase() + config.entityType.slice(1)} Description</label>
+          <ResizableTextArea
+            value={displayValue}
+            onChange={(notes) => onNotesChange(entity, notes)}
+            onSave={() => onSave(entity)}
+            placeholder={placeholder}
+            className="!bg-white !border-gray-200"
+            minRows={3}
+            maxRows={15}
+          />
+          {isDirty && (
+            <p className="text-xs text-gray-500">
+              Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> or click Save to save your changes
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Sheen overlay */}
+      <div className="pointer-events-none absolute inset-0 z-20 transform -translate-x-full -translate-y-full group-hover:translate-x-full group-hover:translate-y-full transition-transform duration-900 ease-out will-change-transform">
+        <div className="absolute left-0 top-[-10%] -translate-y-1/4 bg-gradient-to-r from-transparent via-white/70 to-transparent w-12 h-[300%] rotate-45 -skew-x-12 opacity-80 blur-md"></div>
+      </div>
+    </div>
+  );
+}

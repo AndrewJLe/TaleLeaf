@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Chapter } from '../../types/book';
 import { Button } from '../ui/Button';
-import { BookOpenIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon, SaveIcon, SparklesIcon, TagIcon, TrashIcon, UndoIcon } from '../ui/Icons';
-import { ResizableTextArea } from '../ui/ResizableTextArea';
-import { SaveStateIndicator } from '../ui/SaveStateIndicator';
+import { BookOpenIcon, PlusIcon, SaveIcon, SparklesIcon, UndoIcon } from '../ui/Icons';
 import { SaveStatus } from '../ui/SaveStatus';
 import { Tooltip } from '../ui/Tooltip';
+import { BaseEntityCard, EntityCardConfig } from './BaseEntityCard';
 
 interface ChaptersSectionProps {
     chapters: Chapter[];
@@ -49,9 +48,39 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
     const [dirty, setDirty] = useState<Record<string, boolean>>({});
     const [savingStates, setSavingStates] = useState<Record<string, boolean>>({});
     const [showSavedStates, setShowSavedStates] = useState<Record<string, boolean>>({});
+    // Local state for inline name editing
+    const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
+    const [editingName, setEditingName] = useState<Record<string, boolean>>({});
+
+    // Entity card configuration
+    const cardConfig: EntityCardConfig = {
+        entityType: 'chapter',
+        icon: BookOpenIcon,
+        iconColor: 'green',
+        gradientFrom: 'green',
+        nameEditMode: 'pencil',
+        placeholder: 'Chapter summary and notes...',
+        showSpecialActions: (
+            <Tooltip
+                text="Generate an AI-powered summary of this chapter from your selected text"
+                id={`chapter-summary-generate`}
+            >
+                <Button
+                    onClick={() => {/* onGenerateSummary will be passed per-chapter */ }}
+                    variant="ghost"
+                    size="sm"
+                    isLoading={isGenerating}
+                >
+                    <SparklesIcon size={14} />
+                    <span className="hidden sm:inline">Summary</span>
+                </Button>
+            </Tooltip>
+        )
+    };
 
     // Create chapter lookup map for easy access
     const chapterMap = React.useMemo(() => {
+        if (!chapters) return {};
         return chapters.reduce((acc, chapter, index) => {
             acc[chapter.id] = { chapter, index };
             return acc;
@@ -60,6 +89,7 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
 
     // Clean up drafts when chapters are removed
     useEffect(() => {
+        if (!chapters) return;
         const currentIds = new Set(chapters.map(c => c.id));
         setDrafts(prev => {
             const cleaned = { ...prev };
@@ -93,20 +123,6 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
             ...prev,
             [chapter.id]: notes !== chapter.notes
         }));
-    };
-
-    // Handle tags update
-    const handleUpdateTags = (index: number, chapter: Chapter, tagsText: string) => {
-        // Parse comma-separated tags, clean up whitespace, dedupe case-insensitive
-        const tags = tagsText
-            .split(',')
-            .map(tag => tag.trim())
-            .filter(tag => tag.length > 0)
-            .filter((tag, idx, arr) =>
-                arr.findIndex(t => t.toLowerCase() === tag.toLowerCase()) === idx
-            );
-
-        onUpdateChapter(index, { ...chapter, tags });
     };
 
     // Save individual chapter
@@ -163,7 +179,7 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
         try {
             if (onBatchUpdateChapters) {
                 // Use the batch update method - this prevents race conditions
-                const updatedChapters = chapters.map(chapter =>
+                const updatedChapters = (chapters || []).map(chapter =>
                     dirty[chapter.id] ? { ...chapter, notes: drafts[chapter.id] } : chapter
                 );
 
@@ -266,7 +282,7 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
                             <BookOpenIcon size={20} className="text-green-600" />
                         </div>
                         <div>
-                            <h4 className="text-lg font-semibold text-gray-900">Chapters ({chapters.length})</h4>
+                            <h4 className="text-lg font-semibold text-gray-900">Chapters ({(chapters || []).length})</h4>
                             <SaveStatus isSaving={isSaving} lastSaved={lastSaved} error={saveError} className="mt-0.5" />
                         </div>
                     </div>
@@ -319,28 +335,15 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
             </div>
 
             <div className="space-y-4">
-                {chapters.map((chapter, index) => (
-                    <div key={chapter.id} className="p-4 sm:p-6 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
-                        <div className="space-y-4">
-                            {/* Title Row with Chapter-level Actions */}
-                            <div className="flex items-center gap-3 justify-between">
-                                <div className="flex items-center gap-3 flex-1">
-                                    <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center relative flex-shrink-0">
-                                        <BookOpenIcon size={18} className="text-green-600" />
-                                        {dirty[chapter.id] && (
-                                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white"></div>
-                                        )}
-                                    </div>
-                                    <input
-                                        type="text"
-                                        value={chapter.name}
-                                        onChange={(e) => onUpdateChapter(index, { ...chapter, name: e.target.value })}
-                                        className="font-semibold text-gray-900 text-lg bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-green-500 rounded-lg px-3 py-1 -mx-3 flex-1 min-w-0"
-                                        placeholder="Chapter title"
-                                    />
-                                </div>
-
-                                {/* Chapter-level Actions */}
+                {(chapters || []).map((chapter, index) => (
+                    <BaseEntityCard
+                        key={chapter.id}
+                        entity={chapter}
+                        index={index}
+                        totalCount={(chapters || []).length}
+                        config={{
+                            ...cardConfig,
+                            showSpecialActions: (
                                 <Tooltip
                                     text="Generate an AI-powered summary of this chapter from your selected text"
                                     id={`chapter-summary-${chapter.id}`}
@@ -355,156 +358,45 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
                                         <span className="hidden sm:inline">Summary</span>
                                     </Button>
                                 </Tooltip>
-                            </div>
-
-                            {/* Actions Row - Responsive Layout */}
-                            <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-                                {/* Primary Actions - Save and Status */}
-                                <div className="flex items-center gap-2 order-2 sm:order-1">
-                                    <button
-                                        onClick={() => handleSaveChapter(chapter)}
-                                        disabled={savingStates[chapter.id] || !dirty[chapter.id]}
-                                        className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm flex items-center gap-2 ${savingStates[chapter.id]
-                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                            : dirty[chapter.id]
-                                                ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
-                                                : 'bg-emerald-100 text-emerald-700 cursor-default'
-                                            }`}
-                                        title="Ctrl+Enter to save"
-                                    >
-                                        <SaveIcon size={14} />
-                                        <span className="hidden sm:inline">
-                                            {savingStates[chapter.id] ? 'Saving...' : 'Save'}
-                                        </span>
-                                    </button>
-                                    {dirty[chapter.id] && (
-                                        <Button
-                                            onClick={() => {
-                                                // Revert draft for this chapter
-                                                setDrafts(prev => {
-                                                    const { [chapter.id]: _, ...rest } = prev;
-                                                    return rest;
-                                                });
-                                                setDirty(prev => ({ ...prev, [chapter.id]: false }));
-                                            }}
-                                            variant="secondary"
-                                            size="sm"
-                                            className="bg-gray-200 text-gray-800 hover:bg-gray-300"
-                                        >
-                                            <UndoIcon size={14} />
-                                            <span className="hidden sm:inline">Cancel</span>
-                                        </Button>
-                                    )}
-                                    <SaveStateIndicator
-                                        isSaving={savingStates[chapter.id] || false}
-                                        hasUnsavedChanges={dirty[chapter.id] || false}
-                                        showSaved={showSavedStates[chapter.id] || false}
-                                    />
-                                </div>
-
-                                {/* Secondary Actions - Navigation and Delete Only */}
-                                <div className="flex items-center gap-2 order-1 sm:order-2">
-                                    <div className="flex items-center gap-1">
-                                        <Tooltip
-                                            text="Move this chapter up in the order"
-                                            id={`chapter-up-${chapter.id}`}
-                                        >
-                                            <Button
-                                                onClick={() => onMoveChapter(index, 'up')}
-                                                variant="ghost"
-                                                size="sm"
-                                                disabled={index === 0}
-                                            >
-                                                <ChevronUpIcon size={14} />
-                                            </Button>
-                                        </Tooltip>
-                                        <Tooltip
-                                            text="Move this chapter down in the order"
-                                            id={`chapter-down-${chapter.id}`}
-                                        >
-                                            <Button
-                                                onClick={() => onMoveChapter(index, 'down')}
-                                                variant="ghost"
-                                                size="sm"
-                                                disabled={index === chapters.length - 1}
-                                            >
-                                                <ChevronDownIcon size={14} />
-                                            </Button>
-                                        </Tooltip>
-                                    </div>
-
-                                    <div className="w-px h-6 bg-gray-200"></div>
-
-                                    <Tooltip
-                                        text="Remove this chapter from your list"
-                                        id={`delete-chapter-${chapter.id}`}
-                                    >
-                                        <Button
-                                            onClick={() => onDeleteChapter(index)}
-                                            variant="danger"
-                                            size="sm"
-                                        >
-                                            <TrashIcon size={14} />
-                                        </Button>
-                                    </Tooltip>
-                                </div>
-                            </div>
-
-                            {/* Tags Section */}
-                            <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                    <TagIcon size={16} className="text-gray-400" />
-                                    <input
-                                        type="text"
-                                        value={chapter.tags?.join(', ') || ''}
-                                        onChange={(e) => handleUpdateTags(index, chapter, e.target.value)}
-                                        onKeyPress={(e) => {
-                                            if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                handleUpdateTags(index, chapter, e.currentTarget.value);
-                                            }
-                                        }}
-                                        placeholder="Tags (comma-separated)..."
-                                        className="text-sm text-gray-600 bg-transparent border border-gray-200 rounded-md px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent flex-1"
-                                    />
-                                </div>
-
-                                {/* Tag chips display */}
-                                {chapter.tags && chapter.tags.length > 0 && (
-                                    <div className="flex flex-wrap gap-1">
-                                        {chapter.tags.map((tag, tagIndex) => (
-                                            <span
-                                                key={tagIndex}
-                                                className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full"
-                                            >
-                                                {tag}
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="space-y-3">
-                                <label className="text-sm text-gray-600 font-medium">Chapter Notes</label>
-                                <ResizableTextArea
-                                    value={getDisplayValue(chapter)}
-                                    onChange={(notes) => handleChapterNotesChange(chapter, notes)}
-                                    onSave={() => handleSaveChapter(chapter)}
-                                    placeholder="Chapter summary and notes..."
-                                    minRows={3}
-                                    maxRows={15}
-                                />
-                                {dirty[chapter.id] && (
-                                    <p className="text-xs text-gray-500">
-                                        Press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> or click Save to save your changes
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                    </div>
+                            )
+                        }}
+                        displayValue={getDisplayValue(chapter)}
+                        isDirty={dirty[chapter.id] || false}
+                        isSaving={savingStates[chapter.id] || false}
+                        showSaved={showSavedStates[chapter.id] || false}
+                        onUpdateEntity={onUpdateChapter}
+                        onNotesChange={handleChapterNotesChange}
+                        onSave={handleSaveChapter}
+                        onCancel={(chapter) => {
+                            setDrafts(prev => {
+                                const { [chapter.id]: _, ...rest } = prev;
+                                return rest;
+                            });
+                            setDirty(prev => ({ ...prev, [chapter.id]: false }));
+                        }}
+                        onMove={onMoveChapter}
+                        onDelete={onDeleteChapter}
+                        editingName={editingName[chapter.id] || false}
+                        nameDraft={nameDrafts[chapter.id] ?? chapter.name}
+                        onStartNameEdit={() => {
+                            setNameDrafts(prev => ({ ...prev, [chapter.id]: chapter.name }));
+                            setEditingName(prev => ({ ...prev, [chapter.id]: true }));
+                        }}
+                        onNameChange={(name) => setNameDrafts(prev => ({ ...prev, [chapter.id]: name }))}
+                        onFinishNameEdit={(save) => {
+                            if (save) {
+                                const newName = nameDrafts[chapter.id];
+                                if (newName !== undefined && newName !== chapter.name) {
+                                    onUpdateChapter(index, { ...chapter, name: newName });
+                                }
+                            }
+                            setEditingName(prev => ({ ...prev, [chapter.id]: false }));
+                            setNameDrafts(prev => { const copy = { ...prev }; delete copy[chapter.id]; return copy; });
+                        }}
+                    />
                 ))}
 
-                {chapters.length === 0 && (
+                {(chapters || []).length === 0 && (
                     <div className="text-center py-12 text-gray-500">
                         <div className="mb-4 flex justify-center">
                             <BookOpenIcon size={64} strokeWidth={1} className="text-gray-300" />
