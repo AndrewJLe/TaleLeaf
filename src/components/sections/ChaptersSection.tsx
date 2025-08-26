@@ -56,8 +56,8 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
     const cardConfig: EntityCardConfig = {
         entityType: 'chapter',
         icon: BookOpenIcon,
-        iconColor: 'green',
-        gradientFrom: 'green',
+        iconColor: 'blue',
+        gradientFrom: 'blue',
         nameEditMode: 'pencil',
         placeholder: 'Chapter summary and notes...',
         showSpecialActions: (

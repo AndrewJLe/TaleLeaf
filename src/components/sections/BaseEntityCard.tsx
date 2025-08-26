@@ -133,6 +133,21 @@ export function BaseEntityCard<T extends BaseEntity>({
 
   const { icon: Icon, iconColor, gradientFrom, nameEditMode = 'inline', placeholder, showSpecialActions } = config;
 
+  // Tailwind JIT can't detect classes built from template literals like `from-${gradientFrom}-100`.
+  // Provide an explicit mapping from logical gradient names to the full set of Tailwind utility
+  // classes so the classes are present in source and won't be purged.
+  const GRADIENT_CLASS_MAP: Record<string, string> = {
+    emerald: 'from-emerald-100 to-white border-emerald-100 hover:border-emerald-400',
+    green: 'from-green-100 to-white border-green-100 hover:border-green-400',
+    purple: 'from-purple-100 to-white border-purple-100 hover:border-purple-400',
+    orange: 'from-orange-100 to-white border-orange-100 hover:border-orange-400',
+    amber: 'from-amber-100 to-white border-amber-100 hover:border-amber-400',
+    blue: 'from-blue-100 to-white border-blue-100 hover:border-blue-400',
+    indigo: 'from-indigo-100 to-white border-indigo-100 hover:border-indigo-400'
+  };
+
+  const gradientClass = GRADIENT_CLASS_MAP[gradientFrom] || GRADIENT_CLASS_MAP['emerald'];
+
   const handleCreateTag = () => {
     const raw = newTagDraft.trim().toLowerCase();
     if (!raw || !isValidTag(raw) || (entity.tags || []).includes(raw)) {
@@ -212,7 +227,7 @@ export function BaseEntityCard<T extends BaseEntity>({
   };
 
   return (
-    <div className={`group relative overflow-hidden p-4 sm:p-6 bg-gradient-to-br from-${gradientFrom}-100 to-white border border-${gradientFrom}-100 hover:border-2 hover:border-${gradientFrom}-400 rounded-xl shadow-sm hover:shadow-md transition-all duration-200`}>
+    <div className={`group relative overflow-hidden p-4 sm:p-6 bg-gradient-to-br ${gradientClass} hover:border-2 rounded-xl shadow-sm hover:shadow-md transition-all duration-200`}>
       <div className="space-y-4">
         {/* Title Row */}
         <div className="flex items-center gap-3">
