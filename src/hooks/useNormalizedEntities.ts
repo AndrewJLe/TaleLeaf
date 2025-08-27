@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabaseClient } from '../lib/supabase-client';
 import { trackEntityRestored } from '../lib/telemetry';
 import { BookNote, Chapter, Character, Location } from '../types/book';
@@ -51,6 +51,7 @@ export function useNormalizedCharacters(bookId: string, enable: boolean): BaseRe
   const [items, setItems] = useState<Character[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const debouncesRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   const refresh = useCallback(async () => {
     if (!enable) return;
@@ -77,10 +78,29 @@ export function useNormalizedCharacters(bookId: string, enable: boolean): BaseRe
   const create = useCallback(async (input: Partial<Character> & { name?: string }) => {
     if (!enable) return null;
     const payload = { name: input.name || 'Unnamed', notes: input.notes || '', tags: input.tags || [] };
-    const data = await jsonFetch<{ character: any }>(`/api/books/${bookId}/characters`, { method: 'POST', body: JSON.stringify(payload) });
-    setItems(prev => [...prev, data.character]);
-    return data.character;
-  }, [bookId, enable]);
+    // Optimistic update
+    const tempCharacter = {
+      id: crypto.randomUUID(),
+      bookId,
+      name: payload.name,
+      notes: payload.notes,
+      tags: payload.tags,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      position: input.position ?? items.length * 1000
+    };
+    setItems(prev => [...prev, tempCharacter]);
+
+    try {
+      const data = await jsonFetch<{ character: any }>(`/api/books/${bookId}/characters`, { method: 'POST', body: JSON.stringify(payload) });
+      setItems(prev => prev.map(c => c.id === tempCharacter.id ? data.character : c));
+      return data.character;
+    } catch (e: any) {
+      setError(e.message);
+      setItems(prev => prev.filter(c => c.id !== tempCharacter.id)); // Remove failed optimistic update
+      throw e;
+    }
+  }, [bookId, enable, items.length]);
 
   const update = useCallback(async (id: string, patch: Partial<Character>) => {
     if (!enable) return null;
@@ -91,28 +111,45 @@ export function useNormalizedCharacters(bookId: string, enable: boolean): BaseRe
     const optimisticUpdate = { ...existing, ...patch };
     setItems(prev => prev.map(c => c.id === id ? optimisticUpdate : c));
 
-    try {
-      const payload = { id, name: patch.name || existing.name, notes: patch.notes ?? existing.notes, tags: patch.tags || existing.tags };
-      const data = await jsonFetch<{ character: any }>(`/api/books/${bookId}/characters`, { method: 'PUT', body: JSON.stringify(payload) });
-      // Update with server response
-      setItems(prev => prev.map(c => c.id === id ? data.character : c));
-      return data.character;
-    } catch (e: any) {
-      // Revert optimistic update on error
-      setItems(prev => prev.map(c => c.id === id ? existing : c));
-      setError(e.message);
-      throw e;
-    }
+    // Clear existing debounce
+    const existingTimeout = debouncesRef.current.get(id);
+    if (existingTimeout) clearTimeout(existingTimeout);
+
+    // Debounce the API call
+    const timeout = setTimeout(async () => {
+      debouncesRef.current.delete(id);
+      try {
+        const payload = { id, name: patch.name || existing.name, notes: patch.notes ?? existing.notes, tags: patch.tags || existing.tags };
+        const data = await jsonFetch<{ character: any }>(`/api/books/${bookId}/characters`, { method: 'PUT', body: JSON.stringify(payload) });
+        // Update with server response
+        setItems(prev => prev.map(c => c.id === id ? data.character : c));
+        return data.character;
+      } catch (e: any) {
+        // Revert optimistic update on error
+        setItems(prev => prev.map(c => c.id === id ? existing : c));
+        setError(e.message);
+        throw e;
+      }
+    }, 500); // 500ms debounce
+
+    debouncesRef.current.set(id, timeout);
+    return optimisticUpdate;
   }, [bookId, enable, items]);
 
   const [lastRemoved, setLastRemoved] = useState<{ id: string; entity: Character } | null>(null);
   const remove = useCallback(async (id: string) => {
     if (!enable) return false;
     const existing = items.find(c => c.id === id);
-    await jsonFetch(`/api/books/${bookId}/characters?id=${id}`, { method: 'DELETE' });
-    if (existing) setLastRemoved({ id, entity: existing });
     setItems(prev => prev.filter(c => c.id !== id));
-    return true;
+    try {
+      await jsonFetch(`/api/books/${bookId}/characters?id=${id}`, { method: 'DELETE' });
+      if (existing) setLastRemoved({ id, entity: existing });
+      return true;
+    } catch (e: any) {
+      setError(e.message);
+      if (existing) setItems(prev => [...prev, existing]);
+      return false;
+    }
   }, [bookId, enable, items]);
   const undoRemove = useCallback(async () => {
     if (!enable || !lastRemoved) return false;
@@ -158,6 +195,7 @@ export function useNormalizedChapters(bookId: string, enable: boolean): BaseResu
   const [items, setItems] = useState<Chapter[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const debouncesRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const refresh = useCallback(async () => {
     if (!enable) return; setLoading(true); setError(null);
     try { const data = await jsonFetch<{ chapters: any }>(`/api/books/${bookId}/chapters`); setItems(data.chapters); }
@@ -167,10 +205,31 @@ export function useNormalizedChapters(bookId: string, enable: boolean): BaseResu
   const create = useCallback(async (input: Partial<Chapter> & { title?: string }) => {
     if (!enable) return null;
     const payload = { title: input.title || input.name || 'Untitled', position: input.position, content: input.notes || '', summary: (input as any).summary, analysis: (input as any).analysis, tags: input.tags || [] };
-    const data = await jsonFetch<{ chapter: any }>(`/api/books/${bookId}/chapters`, { method: 'POST', body: JSON.stringify(payload) });
-    setItems(prev => [...prev, data.chapter]);
-    return data.chapter;
-  }, [bookId, enable]);
+    // Optimistic update
+    const tempChapter = {
+      id: crypto.randomUUID(),
+      bookId,
+      name: payload.title,
+      notes: payload.content,
+      summary: payload.summary,
+      analysis: payload.analysis,
+      tags: payload.tags,
+      position: payload.position ?? items.length * 1000,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    } as Chapter;
+    setItems(prev => [...prev, tempChapter]);
+
+    try {
+      const data = await jsonFetch<{ chapter: any }>(`/api/books/${bookId}/chapters`, { method: 'POST', body: JSON.stringify(payload) });
+      setItems(prev => prev.map(c => c.id === tempChapter.id ? data.chapter : c));
+      return data.chapter;
+    } catch (e: any) {
+      setError(e.message);
+      setItems(prev => prev.filter(c => c.id !== tempChapter.id)); // Remove failed optimistic update
+      throw e;
+    }
+  }, [bookId, enable, items.length]);
   const update = useCallback(async (id: string, patch: Partial<Chapter>) => {
     if (!enable) return null;
     const existing = items.find(c => c.id === id);
@@ -180,21 +239,32 @@ export function useNormalizedChapters(bookId: string, enable: boolean): BaseResu
     const optimisticUpdate = { ...existing, ...patch };
     setItems(prev => prev.map(c => c.id === id ? optimisticUpdate : c));
 
-    try {
-      const payload = { id, title: patch.title || existing.title || existing.name, position: patch.position ?? existing.position, content: patch.notes ?? existing.notes, summary: patch.summary ?? existing.summary, analysis: patch.analysis ?? existing.analysis, tags: patch.tags || existing.tags };
-      const data = await jsonFetch<{ chapter: any }>(`/api/books/${bookId}/chapters`, { method: 'PUT', body: JSON.stringify(payload) });
-      // Update with server response
-      setItems(prev => prev.map(c => c.id === id ? data.chapter : c));
-      return data.chapter;
-    } catch (e: any) {
-      // Revert optimistic update on error
-      setItems(prev => prev.map(c => c.id === id ? existing : c));
-      setError(e.message);
-      throw e;
-    }
+    // Clear existing debounce
+    const existingTimeout = debouncesRef.current.get(id);
+    if (existingTimeout) clearTimeout(existingTimeout);
+
+    // Debounce the API call
+    const timeout = setTimeout(async () => {
+      debouncesRef.current.delete(id);
+      try {
+        const payload = { id, title: patch.title || existing.title || existing.name, position: patch.position ?? existing.position, content: patch.notes ?? existing.notes, summary: patch.summary ?? existing.summary, analysis: patch.analysis ?? existing.analysis, tags: patch.tags || existing.tags };
+        const data = await jsonFetch<{ chapter: any }>(`/api/books/${bookId}/chapters`, { method: 'PUT', body: JSON.stringify(payload) });
+        // Update with server response
+        setItems(prev => prev.map(c => c.id === id ? data.chapter : c));
+        return data.chapter;
+      } catch (e: any) {
+        // Revert optimistic update on error
+        setItems(prev => prev.map(c => c.id === id ? existing : c));
+        setError(e.message);
+        throw e;
+      }
+    }, 500);
+
+    debouncesRef.current.set(id, timeout);
+    return optimisticUpdate;
   }, [bookId, enable, items]);
   const [lastRemoved, setLastRemoved] = useState<{ id: string; entity: Chapter } | null>(null);
-  const remove = useCallback(async (id: string) => { if (!enable) return false; const existing = items.find(c => c.id === id); await jsonFetch(`/api/books/${bookId}/chapters?id=${id}`, { method: 'DELETE' }); if (existing) setLastRemoved({ id, entity: existing }); setItems(prev => prev.filter(c => c.id !== id)); return true; }, [bookId, enable, items]);
+  const remove = useCallback(async (id: string) => { if (!enable) return false; const existing = items.find(c => c.id === id); setItems(prev => prev.filter(c => c.id !== id)); try { await jsonFetch(`/api/books/${bookId}/chapters?id=${id}`, { method: 'DELETE' }); if (existing) setLastRemoved({ id, entity: existing }); return true; } catch (e: any) { setError(e.message); if (existing) setItems(prev => [...prev, existing]); return false; } }, [bookId, enable, items]);
   const undoRemove = useCallback(async () => { if (!enable || !lastRemoved) return false; try { await jsonFetch(`/api/books/${bookId}/chapters?restore=${lastRemoved.id}`, { method: 'PATCH' }); setItems(prev => [...prev, lastRemoved.entity]); trackEntityRestored('chapter'); setLastRemoved(null); return true; } catch { return false; } }, [bookId, enable, lastRemoved]);
   const reorder = useCallback(async (orderedIds: string[]) => {
     if (!enable) return;
@@ -218,9 +288,36 @@ export function useNormalizedLocations(bookId: string, enable: boolean): BaseRes
   const [items, setItems] = useState<Location[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const debouncesRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const refresh = useCallback(async () => { if (!enable) return; setLoading(true); setError(null); try { const data = await jsonFetch<{ locations: any }>(`/api/books/${bookId}/locations`); setItems(data.locations); } catch (e: any) { setError(e.message); } finally { setLoading(false); } }, [bookId, enable]);
   useEffect(() => { refresh(); }, [refresh]);
-  const create = useCallback(async (input: Partial<Location> & { name?: string }) => { if (!enable) return null; const payload = { name: input.name || 'Unnamed', notes: input.notes || '', parentId: input.parentId || null, position: input.position, tags: input.tags || [] }; const data = await jsonFetch<{ location: any }>(`/api/books/${bookId}/locations`, { method: 'POST', body: JSON.stringify(payload) }); setItems(prev => [...prev, data.location]); return data.location; }, [bookId, enable]);
+  const create = useCallback(async (input: Partial<Location> & { name?: string }) => {
+    if (!enable) return null;
+    const payload = { name: input.name || 'Unnamed', notes: input.notes || '', parentId: input.parentId || null, position: input.position, tags: input.tags || [] };
+    // Optimistic update
+    const tempLocation = {
+      id: crypto.randomUUID(),
+      bookId,
+      name: payload.name,
+      notes: payload.notes,
+      parentId: payload.parentId,
+      position: payload.position ?? items.length * 1000,
+      tags: payload.tags,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    } as Location;
+    setItems(prev => [...prev, tempLocation]);
+
+    try {
+      const data = await jsonFetch<{ location: any }>(`/api/books/${bookId}/locations`, { method: 'POST', body: JSON.stringify(payload) });
+      setItems(prev => prev.map(l => l.id === tempLocation.id ? data.location : l));
+      return data.location;
+    } catch (e: any) {
+      setError(e.message);
+      setItems(prev => prev.filter(l => l.id !== tempLocation.id)); // Remove failed optimistic update
+      throw e;
+    }
+  }, [bookId, enable, items.length]);
   const update = useCallback(async (id: string, patch: Partial<Location>) => {
     if (!enable) return null;
     const existing = items.find(l => l.id === id);
@@ -230,21 +327,32 @@ export function useNormalizedLocations(bookId: string, enable: boolean): BaseRes
     const optimisticUpdate = { ...existing, ...patch };
     setItems(prev => prev.map(l => l.id === id ? optimisticUpdate : l));
 
-    try {
-      const payload = { id, name: patch.name || existing.name, notes: patch.notes ?? existing.notes, parentId: patch.parentId ?? existing.parentId ?? null, position: patch.position ?? existing.position, tags: patch.tags || existing.tags };
-      const data = await jsonFetch<{ location: any }>(`/api/books/${bookId}/locations`, { method: 'PUT', body: JSON.stringify(payload) });
-      // Update with server response
-      setItems(prev => prev.map(l => l.id === id ? data.location : l));
-      return data.location;
-    } catch (e: any) {
-      // Revert optimistic update on error
-      setItems(prev => prev.map(l => l.id === id ? existing : l));
-      setError(e.message);
-      throw e;
-    }
+    // Clear existing debounce
+    const existingTimeout = debouncesRef.current.get(id);
+    if (existingTimeout) clearTimeout(existingTimeout);
+
+    // Debounce the API call
+    const timeout = setTimeout(async () => {
+      debouncesRef.current.delete(id);
+      try {
+        const payload = { id, name: patch.name || existing.name, notes: patch.notes ?? existing.notes, parentId: patch.parentId ?? existing.parentId ?? null, position: patch.position ?? existing.position, tags: patch.tags || existing.tags };
+        const data = await jsonFetch<{ location: any }>(`/api/books/${bookId}/locations`, { method: 'PUT', body: JSON.stringify(payload) });
+        // Update with server response
+        setItems(prev => prev.map(l => l.id === id ? data.location : l));
+        return data.location;
+      } catch (e: any) {
+        // Revert optimistic update on error
+        setItems(prev => prev.map(l => l.id === id ? existing : l));
+        setError(e.message);
+        throw e;
+      }
+    }, 500);
+
+    debouncesRef.current.set(id, timeout);
+    return optimisticUpdate;
   }, [bookId, enable, items]);
   const [lastRemoved, setLastRemoved] = useState<{ id: string; entity: Location } | null>(null);
-  const remove = useCallback(async (id: string) => { if (!enable) return false; const existing = items.find(l => l.id === id); await jsonFetch(`/api/books/${bookId}/locations?id=${id}`, { method: 'DELETE' }); if (existing) setLastRemoved({ id, entity: existing }); setItems(prev => prev.filter(l => l.id !== id)); return true; }, [bookId, enable, items]);
+  const remove = useCallback(async (id: string) => { if (!enable) return false; const existing = items.find(l => l.id === id); setItems(prev => prev.filter(l => l.id !== id)); try { await jsonFetch(`/api/books/${bookId}/locations?id=${id}`, { method: 'DELETE' }); if (existing) setLastRemoved({ id, entity: existing }); return true; } catch (e: any) { setError(e.message); if (existing) setItems(prev => [...prev, existing]); return false; } }, [bookId, enable, items]);
   const undoRemove = useCallback(async () => { if (!enable || !lastRemoved) return false; try { await jsonFetch(`/api/books/${bookId}/locations?restore=${lastRemoved.id}`, { method: 'PATCH' }); setItems(prev => [...prev, lastRemoved.entity]); trackEntityRestored('location'); setLastRemoved(null); return true; } catch { return false; } }, [bookId, enable, lastRemoved]);
   const reorder = useCallback(async (orderedIds: string[]) => {
     if (!enable) return;
@@ -269,6 +377,7 @@ export function useNormalizedNotes(bookId: string, enable: boolean = true) {
   const [items, setItems] = useState<BookNote[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const debouncesRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   const refresh = useCallback(async () => {
     if (!enable) return;
@@ -327,26 +436,37 @@ export function useNormalizedNotes(bookId: string, enable: boolean = true) {
     const updated = { ...existing, ...patch, updatedAt: new Date().toISOString() };
     setItems(prev => prev.map(n => n.id === id ? updated : n));
 
-    try {
-      const payload = {
-        id,
-        title: patch.title ?? existing.title,
-        body: patch.body ?? existing.body,
-        tags: patch.tags ?? existing.tags,
-        position: patch.position ?? existing.position,
-        spoilerProtected: patch.spoilerProtected ?? existing.spoilerProtected,
-        minVisiblePage: patch.minVisiblePage ?? existing.minVisiblePage,
-        groupId: patch.groupId ?? existing.groupId
-      };
-      const data = await jsonFetch<{ note: BookNote }>(`/api/books/${bookId}/notes`, { method: 'PUT', body: JSON.stringify(payload) });
-      setItems(prev => prev.map(n => n.id === id ? data.note : n));
-      return data.note;
-    } catch (e: any) {
-      setError(e.message);
-      // Revert optimistic update
-      setItems(prev => prev.map(n => n.id === id ? existing : n));
-      throw e;
-    }
+    // Clear existing debounce
+    const existingTimeout = debouncesRef.current.get(id);
+    if (existingTimeout) clearTimeout(existingTimeout);
+
+    // Debounce the API call
+    const timeout = setTimeout(async () => {
+      debouncesRef.current.delete(id);
+      try {
+        const payload = {
+          id,
+          title: patch.title ?? existing.title,
+          body: patch.body ?? existing.body,
+          tags: patch.tags ?? existing.tags,
+          position: patch.position ?? existing.position,
+          spoilerProtected: patch.spoilerProtected ?? existing.spoilerProtected,
+          minVisiblePage: patch.minVisiblePage ?? existing.minVisiblePage,
+          groupId: patch.groupId ?? existing.groupId
+        };
+        const data = await jsonFetch<{ note: BookNote }>(`/api/books/${bookId}/notes`, { method: 'PUT', body: JSON.stringify(payload) });
+        setItems(prev => prev.map(n => n.id === id ? data.note : n));
+        return data.note;
+      } catch (e: any) {
+        setError(e.message);
+        // Revert optimistic update
+        setItems(prev => prev.map(n => n.id === id ? existing : n));
+        throw e;
+      }
+    }, 500);
+
+    debouncesRef.current.set(id, timeout);
+    return updated;
   }, [bookId, enable, items]);
 
   const [lastRemoved, setLastRemoved] = useState<{ id: string; entity: BookNote } | null>(null);
