@@ -154,7 +154,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
     const updateBody: any = {
       position: payload.position
     };
-    
+
     // Only include fields that are explicitly provided
     if (payload.title !== undefined) updateBody.title = payload.title;
     if (payload.body !== undefined) updateBody.body = payload.body;
