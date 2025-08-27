@@ -391,7 +391,7 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
                             if (save) {
                                 const newName = nameDrafts[chapter.id];
                                 if (newName !== undefined && newName !== chapter.name) {
-                                    onUpdateChapter(index, { ...chapter, name: newName });
+                                    onUpdateChapter(index, { ...chapter, name: newName, title: newName });
                                 }
                             }
                             setEditingName(prev => ({ ...prev, [chapter.id]: false }));

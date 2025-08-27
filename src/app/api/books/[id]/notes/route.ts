@@ -33,20 +33,27 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         if (!tagMap[r.note_id].includes(name)) tagMap[r.note_id].push(name);
       });
     }
-    const notes = (data || []).map(n => ({
-      id: n.id,
-      bookId: n.book_id,
-      // preserve empty titles ("") instead of converting to undefined/null
-      title: n.title ?? undefined,
-      body: n.body || '',
-      tags: tagMap[n.id] || [],
-      position: n.position || 0,
-      spoilerProtected: n.spoiler_protected || false,
-      minVisiblePage: n.min_visible_page ?? undefined,
-      groupId: n.group_id ?? null,
-      createdAt: n.created_at,
-      updatedAt: n.updated_at
-    }));
+    const notes = (data || []).map((n, index) => {
+      // Generate a stable default title based on position or ID if title is null
+      const defaultTitle = n.position !== null && n.position !== undefined
+        ? `Note ${(n.position / 1000) + 1}`
+        : `Note ${n.id.slice(-4)}`;
+
+      return {
+        id: n.id,
+        bookId: n.book_id,
+        // Generate default title if null/undefined in database
+        title: n.title || defaultTitle,
+        body: n.body || '',
+        tags: tagMap[n.id] || [],
+        position: n.position || 0,
+        spoilerProtected: n.spoiler_protected || false,
+        minVisiblePage: n.min_visible_page ?? undefined,
+        groupId: n.group_id ?? null,
+        createdAt: n.created_at,
+        updatedAt: n.updated_at
+      };
+    });
     return NextResponse.json({ notes });
   } catch (e: any) {
     const status = e.message === 'not found' ? 404 : 500;
@@ -69,8 +76,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     await ensureBookOwnership(supabase, bookId, user.id);
     const insertBody: any = {
       book_id: bookId,
-      // allow empty string titles to be saved; only coerce null/undefined to null
-      title: payload.title ?? null,
+      // Ensure title is never null - use default if not provided
+      title: payload.title || `Note ${(payload.position || 0) / 1000 + 1}`,
       body: payload.body || '',
       position: payload.position,
       spoiler_protected: payload.spoilerProtected || false,
@@ -87,7 +94,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         // Upsert tags metadata (ignore conflicts)
         for (const name of tagNames) {
           try {
-            const { error: tagErr } = await supabase.from('book_tags').insert({ book_id: bookId, name }).select('id').single();
+            const { error: tagErr } = await supabase.from('book_tags').upsert({ book_id: bookId, name }).select('id').single();
             if (tagErr && tagErr.code !== '23505') console.warn('tag upsert issue', tagErr);
           } catch { /* ignore */ }
         }
@@ -98,17 +105,23 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         for (const name of tagNames) {
           const tagId = tagIdMap[name];
           if (!tagId) continue;
-          try { await supabase.from('book_note_tags').insert({ note_id: inserted.id, tag_id: tagId }); } catch { /* ignore */ }
+          try { await supabase.from('book_note_tags').upsert({ note_id: inserted.id, tag_id: tagId }); } catch { /* ignore */ }
         }
       }
     }
+    // Get the tags for the response
+    const { data: insertedJoins } = await supabase.from('book_note_tags')
+      .select('tag:book_tags(name)')
+      .eq('note_id', inserted.id);
+    const insertedTagNames = (insertedJoins || []).map((j: any) => j.tag?.name).filter((n: string) => !!n);
+
     return NextResponse.json({
       note: {
         id: inserted.id,
         bookId: inserted.book_id,
         title: inserted.title ?? undefined,
         body: inserted.body || '',
-        tags: (payload.tags || []).map(t => t.toLowerCase()),
+        tags: insertedTagNames,
         position: inserted.position || 0,
         spoilerProtected: inserted.spoiler_protected || false,
         minVisiblePage: inserted.min_visible_page ?? undefined,
@@ -139,51 +152,61 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
     if (exErr) throw exErr;
     if (!existing) return NextResponse.json({ error: 'not found' }, { status: 404 });
     const updateBody: any = {
-      title: payload.title ?? null,
-      body: payload.body || '',
-      position: payload.position,
-      spoiler_protected: payload.spoilerProtected || false,
-      min_visible_page: payload.minVisiblePage ?? null,
-      group_id: payload.groupId ?? null
+      position: payload.position
     };
+    
+    // Only include fields that are explicitly provided
+    if (payload.title !== undefined) updateBody.title = payload.title;
+    if (payload.body !== undefined) updateBody.body = payload.body;
+    if (payload.spoilerProtected !== undefined) updateBody.spoiler_protected = payload.spoilerProtected;
+    if (payload.minVisiblePage !== undefined) updateBody.min_visible_page = payload.minVisiblePage;
+    if (payload.groupId !== undefined) updateBody.group_id = payload.groupId;
     const { data: updated, error: updErr } = await supabase.from('book_notes').update(updateBody).eq('id', payload.id).select('id,book_id,title,body,position,spoiler_protected,min_visible_page,group_id,created_at,updated_at').single();
     if (updErr) throw updErr;
 
-    // Sync note tag joins
-    const newTagNames = (payload.tags || []).map(t => t.toLowerCase()).filter(t => !!t);
-    // Upsert tag metadata
-    for (const name of newTagNames) {
-      try { await supabase.from('book_tags').insert({ book_id: bookId, name }).select('id').single(); } catch { /* ignore */ }
-    }
-    // Existing join tag names
-    const { data: existingJoins } = await supabase.from('book_note_tags')
-      .select('tag_id, tag:book_tags(name)')
-      .eq('note_id', payload.id);
-    const existingNames = (existingJoins || []).map((j: any) => j.tag?.name).filter((n: string) => !!n);
-    const toAdd = newTagNames.filter(n => !existingNames.includes(n));
-    const toRemove = existingNames.filter(n => !newTagNames.includes(n));
-    if (toAdd.length || toRemove.length) {
-      // Fetch tag ids for all involved names
-      const involved = Array.from(new Set([...toAdd, ...toRemove]));
-      const { data: involvedTags } = await supabase.from('book_tags').select('id,name').eq('book_id', bookId).in('name', involved);
-      const idByName: Record<string, string> = {};
-      (involvedTags || []).forEach(r => { idByName[r.name] = r.id; });
-      for (const name of toAdd) {
-        const tagId = idByName[name];
-        if (tagId) { try { await supabase.from('book_note_tags').insert({ note_id: payload.id, tag_id: tagId }); } catch { /* ignore */ } }
+    // Sync note tag joins only if tags were explicitly provided
+    if (payload.tags !== undefined) {
+      const newTagNames = (payload.tags || []).map(t => t.toLowerCase()).filter(t => !!t);
+      // Upsert tag metadata
+      for (const name of newTagNames) {
+        try { await supabase.from('book_tags').upsert({ book_id: bookId, name }).select('id').single(); } catch { /* ignore */ }
       }
-      if (toRemove.length) {
-        const removeIds = toRemove.map(n => idByName[n]).filter(Boolean);
-        if (removeIds.length) await Promise.all(removeIds.map(id => supabase.from('book_note_tags').delete().eq('note_id', payload.id).eq('tag_id', id)));
+      // Existing join tag names
+      const { data: existingJoins } = await supabase.from('book_note_tags')
+        .select('tag_id, tag:book_tags(name)')
+        .eq('note_id', payload.id);
+      const existingNames = (existingJoins || []).map((j: any) => j.tag?.name).filter((n: string) => !!n);
+      const toAdd = newTagNames.filter(n => !existingNames.includes(n));
+      const toRemove = existingNames.filter(n => !newTagNames.includes(n));
+      if (toAdd.length || toRemove.length) {
+        // Fetch tag ids for all involved names
+        const involved = Array.from(new Set([...toAdd, ...toRemove]));
+        const { data: involvedTags } = await supabase.from('book_tags').select('id,name').eq('book_id', bookId).in('name', involved);
+        const idByName: Record<string, string> = {};
+        (involvedTags || []).forEach(r => { idByName[r.name] = r.id; });
+        for (const name of toAdd) {
+          const tagId = idByName[name];
+          if (tagId) { try { await supabase.from('book_note_tags').upsert({ note_id: payload.id, tag_id: tagId }); } catch { /* ignore */ } }
+        }
+        if (toRemove.length) {
+          const removeIds = toRemove.map(n => idByName[n]).filter(Boolean);
+          if (removeIds.length) await Promise.all(removeIds.map(id => supabase.from('book_note_tags').delete().eq('note_id', payload.id).eq('tag_id', id)));
+        }
       }
     }
+    // Get the updated tags for the response
+    const { data: updatedJoins } = await supabase.from('book_note_tags')
+      .select('tag:book_tags(name)')
+      .eq('note_id', updated.id);
+    const updatedTagNames = (updatedJoins || []).map((j: any) => j.tag?.name).filter((n: string) => !!n);
+
     return NextResponse.json({
       note: {
         id: updated.id,
         bookId: updated.book_id,
-        title: updated.title ?? undefined,
+        title: updated.title || `Note ${(updated.position || 0) / 1000 + 1}`,
         body: updated.body || '',
-        tags: (payload.tags || []).map(t => t.toLowerCase()),
+        tags: updatedTagNames,
         position: updated.position || 0,
         spoilerProtected: updated.spoiler_protected || false,
         minVisiblePage: updated.min_visible_page ?? undefined,

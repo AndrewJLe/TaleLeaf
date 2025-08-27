@@ -485,7 +485,7 @@ export function useNormalizedNotes(bookId: string, enable: boolean = true) {
           id,
           title: patch.title ?? existing.title,
           body: patch.body ?? existing.body,
-          tags: patch.tags ?? existing.tags,
+          tags: patch.tags !== undefined ? patch.tags : undefined,
           position: patch.position ?? existing.position,
           spoilerProtected: patch.spoilerProtected ?? existing.spoilerProtected,
           minVisiblePage: patch.minVisiblePage ?? existing.minVisiblePage,

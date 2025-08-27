@@ -590,7 +590,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                     // Convert BookNote to BaseEntity format
                                                     const noteEntity = {
                                                         id: note.id,
-                                                        name: note.title || '',
+                                                        name: note.title || `Note ${index + 1}`,
                                                         notes: note.body || '',
                                                         tags: note.tags || []
                                                     };
@@ -641,9 +641,9 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                                 await normalizedNotes.reorder(reorderedIds.map(item => item.id));
                                                             }}
                                                             editingName={editingNoteName[note.id] || false}
-                                                            nameDraft={noteNameDrafts[note.id] ?? note.title}
+                                                            nameDraft={noteNameDrafts[note.id] ?? (note.title || `Note ${index + 1}`)}
                                                             onStartNameEdit={() => {
-                                                                setNoteNameDrafts(prev => ({ ...prev, [note.id]: note.title || '' }));
+                                                                setNoteNameDrafts(prev => ({ ...prev, [note.id]: note.title || `Note ${index + 1}` }));
                                                                 setEditingNoteName(prev => ({ ...prev, [note.id]: true }));
                                                             }}
                                                             onNameChange={(name) => setNoteNameDrafts(prev => ({ ...prev, [note.id]: name }))}
