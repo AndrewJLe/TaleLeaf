@@ -140,9 +140,7 @@ export const NotesNormalizedSection: React.FC<NotesNormalizedSectionProps> = ({
     if (swapIndex < 0 || swapIndex >= ordered.length) return;
     [ordered[index], ordered[swapIndex]] = [ordered[swapIndex], ordered[index]];
     ordered.forEach((n, i) => updateDraft(n.id, { position: i * 1000 }));
-    if (!ordered.some(n => n.id.startsWith('temp-'))) {
-      await reorderNotes(ordered.map(n => n.id));
-    }
+    await reorderNotes(ordered.map(n => n.id));
   };
 
   const handleDelete = async (index: number) => {

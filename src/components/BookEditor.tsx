@@ -401,11 +401,13 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                             onDeleteCharacter={(index) => { const target = normalizedCharacters.items[index]; if (target) normalizedCharacters.remove(target.id); }}
                                             onMoveCharacter={async (index, direction) => {
                                                 const ordered = [...normalizedCharacters.items].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-                                                const swapIndex = direction === 'up' ? index - 1 : index + 1;
+                                                const item = normalizedCharacters.items[index];
+                                                const sortedIndex = ordered.findIndex(c => c.id === item.id);
+                                                const swapIndex = direction === 'up' ? sortedIndex - 1 : sortedIndex + 1;
                                                 if (swapIndex < 0 || swapIndex >= ordered.length) return;
                                                 // Create reordered list using fast reorder method
                                                 const reorderedIds = [...ordered];
-                                                [reorderedIds[index], reorderedIds[swapIndex]] = [reorderedIds[swapIndex], reorderedIds[index]];
+                                                [reorderedIds[sortedIndex], reorderedIds[swapIndex]] = [reorderedIds[swapIndex], reorderedIds[sortedIndex]];
                                                 await normalizedCharacters.reorder(reorderedIds.map(item => item.id));
                                             }}
                                             onGenerateCharacters={() => confirmAIAction('generate characters', 'Analyze the provided text and identified all characters mentioned', generateCharacters)}
@@ -428,11 +430,13 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                             onDeleteChapter={(index) => { const target = normalizedChapters.items[index]; if (target) normalizedChapters.remove(target.id); }}
                                             onMoveChapter={async (index, direction) => {
                                                 const ordered = [...normalizedChapters.items].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-                                                const swapIndex = direction === 'up' ? index - 1 : index + 1;
+                                                const item = normalizedChapters.items[index];
+                                                const sortedIndex = ordered.findIndex(c => c.id === item.id);
+                                                const swapIndex = direction === 'up' ? sortedIndex - 1 : sortedIndex + 1;
                                                 if (swapIndex < 0 || swapIndex >= ordered.length) return;
                                                 // Create reordered list using fast reorder method
                                                 const reorderedIds = [...ordered];
-                                                [reorderedIds[index], reorderedIds[swapIndex]] = [reorderedIds[swapIndex], reorderedIds[index]];
+                                                [reorderedIds[sortedIndex], reorderedIds[swapIndex]] = [reorderedIds[swapIndex], reorderedIds[sortedIndex]];
                                                 await normalizedChapters.reorder(reorderedIds.map(item => item.id));
                                             }}
                                             onGenerateSummary={(chapterIndex) => confirmAIAction('generate chapter summary', 'Create a concise chapter summary for the provided text', () => generateChapterSummary(chapterIndex))}
@@ -456,11 +460,13 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                             onDeleteLocation={(index) => { const target = normalizedLocations.items[index]; if (target) normalizedLocations.remove(target.id); }}
                                             onMoveLocation={async (index, direction) => {
                                                 const ordered = [...normalizedLocations.items].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-                                                const swapIndex = direction === 'up' ? index - 1 : index + 1;
+                                                const item = normalizedLocations.items[index];
+                                                const sortedIndex = ordered.findIndex(c => c.id === item.id);
+                                                const swapIndex = direction === 'up' ? sortedIndex - 1 : sortedIndex + 1;
                                                 if (swapIndex < 0 || swapIndex >= ordered.length) return;
                                                 // Create reordered list using fast reorder method
                                                 const reorderedIds = [...ordered];
-                                                [reorderedIds[index], reorderedIds[swapIndex]] = [reorderedIds[swapIndex], reorderedIds[index]];
+                                                [reorderedIds[sortedIndex], reorderedIds[swapIndex]] = [reorderedIds[swapIndex], reorderedIds[sortedIndex]];
                                                 await normalizedLocations.reorder(reorderedIds.map(item => item.id));
                                             }}
                                             onGenerateLocations={() => confirmAIAction('generate locations', 'Analyze the provided text and identify all locations, places, and settings mentioned', generateLocations)}
@@ -626,10 +632,12 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                             onDelete={() => normalizedNotes.remove(note.id)}
                                                             onMove={async (index: number, direction: 'up' | 'down') => {
                                                                 const ordered = [...normalizedNotes.items].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-                                                                const swapIndex = direction === 'up' ? index - 1 : index + 1;
+                                                                const item = normalizedNotes.items[index];
+                                                                const sortedIndex = ordered.findIndex(c => c.id === item.id);
+                                                                const swapIndex = direction === 'up' ? sortedIndex - 1 : sortedIndex + 1;
                                                                 if (swapIndex < 0 || swapIndex >= ordered.length) return;
                                                                 const reorderedIds = [...ordered];
-                                                                [reorderedIds[index], reorderedIds[swapIndex]] = [reorderedIds[swapIndex], reorderedIds[index]];
+                                                                [reorderedIds[sortedIndex], reorderedIds[swapIndex]] = [reorderedIds[swapIndex], reorderedIds[sortedIndex]];
                                                                 await normalizedNotes.reorder(reorderedIds.map(item => item.id));
                                                             }}
                                                             editingName={editingNoteName[note.id] || false}

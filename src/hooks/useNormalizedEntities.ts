@@ -77,27 +77,30 @@ export function useNormalizedCharacters(bookId: string, enable: boolean): BaseRe
 
   const create = useCallback(async (input: Partial<Character> & { name?: string }) => {
     if (!enable) return null;
+    const tempId = `temp-${crypto.randomUUID()}`;
     const payload = { name: input.name || 'Unnamed', notes: input.notes || '', tags: input.tags || [] };
-    // Optimistic update
-    const tempCharacter = {
-      id: crypto.randomUUID(),
-      bookId,
+
+    // Optimistic update: add to state immediately with temp ID
+    const optimisticCharacter: Character = {
+      id: tempId,
       name: payload.name,
       notes: payload.notes,
       tags: payload.tags,
+      position: input.position ?? items.length * 1000,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      position: input.position ?? items.length * 1000
+      updatedAt: new Date().toISOString()
     };
-    setItems(prev => [...prev, tempCharacter]);
+    setItems(prev => [...prev, optimisticCharacter]);
 
     try {
       const data = await jsonFetch<{ character: any }>(`/api/books/${bookId}/characters`, { method: 'POST', body: JSON.stringify(payload) });
-      setItems(prev => prev.map(c => c.id === tempCharacter.id ? data.character : c));
+      // Replace temp ID with real ID, preserving the optimistic position
+      setItems(prev => prev.map(c => c.id === tempId ? { ...data.character, position: optimisticCharacter.position } : c));
       return data.character;
     } catch (e: any) {
+      // Remove optimistic update on error
+      setItems(prev => prev.filter(c => c.id !== tempId));
       setError(e.message);
-      setItems(prev => prev.filter(c => c.id !== tempCharacter.id)); // Remove failed optimistic update
       throw e;
     }
   }, [bookId, enable, items.length]);
@@ -172,15 +175,20 @@ export function useNormalizedCharacters(bookId: string, enable: boolean): BaseRe
       }).filter(Boolean) as Character[];
       setItems(orderedItems);
 
-      // Update positions via API in background
-      for (let i = 0; i < orderedIds.length; i++) {
-        const id = orderedIds[i];
+      // Skip API call if there are temp IDs (items not yet persisted)
+      if (orderedIds.some(id => id.startsWith('temp-'))) {
+        return;
+      }
+
+      // Update positions via API in background (parallel for better performance)
+      const promises = orderedIds.map((id, i) => {
         const position = i * 1000;
-        await jsonFetch(`/api/books/${bookId}/characters`, {
+        return jsonFetch(`/api/books/${bookId}/characters`, {
           method: 'PUT',
           body: JSON.stringify({ id, position })
         });
-      }
+      });
+      await Promise.all(promises);
     } catch (e: any) {
       setError(e.message);
       // Revert optimistic update on error
@@ -204,12 +212,14 @@ export function useNormalizedChapters(bookId: string, enable: boolean): BaseResu
   useEffect(() => { refresh(); }, [refresh]);
   const create = useCallback(async (input: Partial<Chapter> & { title?: string }) => {
     if (!enable) return null;
+    const tempId = `temp-${crypto.randomUUID()}`;
     const payload = { title: input.title || input.name || 'Untitled', position: input.position, content: input.notes || '', summary: (input as any).summary, analysis: (input as any).analysis, tags: input.tags || [] };
-    // Optimistic update
-    const tempChapter = {
-      id: crypto.randomUUID(),
-      bookId,
+
+    // Optimistic update: add to state immediately with temp ID
+    const optimisticChapter: Chapter = {
+      id: tempId,
       name: payload.title,
+      title: payload.title,
       notes: payload.content,
       summary: payload.summary,
       analysis: payload.analysis,
@@ -217,16 +227,18 @@ export function useNormalizedChapters(bookId: string, enable: boolean): BaseResu
       position: payload.position ?? items.length * 1000,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
-    } as Chapter;
-    setItems(prev => [...prev, tempChapter]);
+    };
+    setItems(prev => [...prev, optimisticChapter]);
 
     try {
       const data = await jsonFetch<{ chapter: any }>(`/api/books/${bookId}/chapters`, { method: 'POST', body: JSON.stringify(payload) });
-      setItems(prev => prev.map(c => c.id === tempChapter.id ? data.chapter : c));
+      // Replace temp ID with real ID, preserving the optimistic position
+      setItems(prev => prev.map(c => c.id === tempId ? { ...data.chapter, position: optimisticChapter.position } : c));
       return data.chapter;
     } catch (e: any) {
+      // Remove optimistic update on error
+      setItems(prev => prev.filter(c => c.id !== tempId));
       setError(e.message);
-      setItems(prev => prev.filter(c => c.id !== tempChapter.id)); // Remove failed optimistic update
       throw e;
     }
   }, [bookId, enable, items.length]);
@@ -274,11 +286,17 @@ export function useNormalizedChapters(bookId: string, enable: boolean): BaseResu
         return item ? { ...item, position: index * 1000 } : null;
       }).filter(Boolean) as Chapter[];
       setItems(orderedItems);
-      for (let i = 0; i < orderedIds.length; i++) {
-        const id = orderedIds[i];
-        const position = i * 1000;
-        await jsonFetch(`/api/books/${bookId}/chapters`, { method: 'PUT', body: JSON.stringify({ id, position }) });
+
+      // Skip API call if there are temp IDs (items not yet persisted)
+      if (orderedIds.some(id => id.startsWith('temp-'))) {
+        return;
       }
+
+      const promises = orderedIds.map((id, i) => {
+        const position = i * 1000;
+        return jsonFetch(`/api/books/${bookId}/chapters`, { method: 'PUT', body: JSON.stringify({ id, position }) });
+      });
+      await Promise.all(promises);
     } catch (e: any) { setError(e.message); refresh(); }
   }, [bookId, enable, items, refresh]);
   return { items, loading, error, refresh, create, update, remove, reorder, lastRemoved, undoRemove };
@@ -293,28 +311,31 @@ export function useNormalizedLocations(bookId: string, enable: boolean): BaseRes
   useEffect(() => { refresh(); }, [refresh]);
   const create = useCallback(async (input: Partial<Location> & { name?: string }) => {
     if (!enable) return null;
+    const tempId = `temp-${crypto.randomUUID()}`;
     const payload = { name: input.name || 'Unnamed', notes: input.notes || '', parentId: input.parentId || null, position: input.position, tags: input.tags || [] };
-    // Optimistic update
-    const tempLocation = {
-      id: crypto.randomUUID(),
-      bookId,
+
+    // Optimistic update: add to state immediately with temp ID
+    const optimisticLocation: Location = {
+      id: tempId,
       name: payload.name,
       notes: payload.notes,
       parentId: payload.parentId,
-      position: payload.position ?? items.length * 1000,
       tags: payload.tags,
+      position: payload.position ?? items.length * 1000,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
-    } as Location;
-    setItems(prev => [...prev, tempLocation]);
+    };
+    setItems(prev => [...prev, optimisticLocation]);
 
     try {
       const data = await jsonFetch<{ location: any }>(`/api/books/${bookId}/locations`, { method: 'POST', body: JSON.stringify(payload) });
-      setItems(prev => prev.map(l => l.id === tempLocation.id ? data.location : l));
+      // Replace temp ID with real ID, preserving the optimistic position
+      setItems(prev => prev.map(l => l.id === tempId ? { ...data.location, position: optimisticLocation.position } : l));
       return data.location;
     } catch (e: any) {
+      // Remove optimistic update on error
+      setItems(prev => prev.filter(l => l.id !== tempId));
       setError(e.message);
-      setItems(prev => prev.filter(l => l.id !== tempLocation.id)); // Remove failed optimistic update
       throw e;
     }
   }, [bookId, enable, items.length]);
@@ -362,11 +383,17 @@ export function useNormalizedLocations(bookId: string, enable: boolean): BaseRes
         return item ? { ...item, position: index * 1000 } : null;
       }).filter(Boolean) as Location[];
       setItems(orderedItems);
-      for (let i = 0; i < orderedIds.length; i++) {
-        const id = orderedIds[i];
-        const position = i * 1000;
-        await jsonFetch(`/api/books/${bookId}/locations`, { method: 'PUT', body: JSON.stringify({ id, position }) });
+
+      // Skip API call if there are temp IDs (items not yet persisted)
+      if (orderedIds.some(id => id.startsWith('temp-'))) {
+        return;
       }
+
+      const promises = orderedIds.map((id, i) => {
+        const position = i * 1000;
+        return jsonFetch(`/api/books/${bookId}/locations`, { method: 'PUT', body: JSON.stringify({ id, position }) });
+      });
+      await Promise.all(promises);
     } catch (e: any) { setError(e.message); refresh(); }
   }, [bookId, enable, items, refresh]);
   return { items, loading, error, refresh, create, update, remove, reorder, lastRemoved, undoRemove };
@@ -397,6 +424,7 @@ export function useNormalizedNotes(bookId: string, enable: boolean = true) {
 
   const create = useCallback(async (input: Partial<BookNote> & { title?: string; body?: string }) => {
     if (!enable) return null;
+    const tempId = `temp-${crypto.randomUUID()}`;
     const payload = {
       title: input.title || `Note ${items.length + 1}`,
       body: input.body || '',
@@ -406,23 +434,32 @@ export function useNormalizedNotes(bookId: string, enable: boolean = true) {
       minVisiblePage: input.minVisiblePage,
       groupId: input.groupId || null
     };
-    // Optimistic update
-    const tempNote = {
-      id: crypto.randomUUID(),
-      bookId,
-      ...payload,
+
+    // Optimistic update: add to state immediately with temp ID
+    const optimisticNote: BookNote = {
+      id: tempId,
+      title: payload.title,
+      body: payload.body,
+      tags: payload.tags,
+      position: payload.position,
+      spoilerProtected: payload.spoilerProtected,
+      minVisiblePage: payload.minVisiblePage,
+      groupId: payload.groupId,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      bookId: bookId
     };
-    setItems(prev => [...prev, tempNote]);
+    setItems(prev => [...prev, optimisticNote]);
 
     try {
       const data = await jsonFetch<{ note: BookNote }>(`/api/books/${bookId}/notes`, { method: 'POST', body: JSON.stringify(payload) });
-      setItems(prev => prev.map(n => n.id === tempNote.id ? data.note : n));
+      // Replace temp ID with real ID, preserving the optimistic position
+      setItems(prev => prev.map(n => n.id === tempId ? { ...data.note, position: optimisticNote.position } : n));
       return data.note;
     } catch (e: any) {
+      // Remove optimistic update on error
+      setItems(prev => prev.filter(n => n.id !== tempId));
       setError(e.message);
-      setItems(prev => prev.filter(n => n.id !== tempNote.id)); // Remove failed optimistic update
       throw e;
     }
   }, [bookId, enable, items.length]);
@@ -496,15 +533,20 @@ export function useNormalizedNotes(bookId: string, enable: boolean = true) {
       }).filter(Boolean) as BookNote[];
       setItems(orderedItems);
 
-      // Update positions via API in background
-      for (let i = 0; i < orderedIds.length; i++) {
-        const id = orderedIds[i];
+      // Skip API call if there are temp IDs (items not yet persisted)
+      if (orderedIds.some(id => id.startsWith('temp-'))) {
+        return;
+      }
+
+      // Update positions via API in background (parallel for better performance)
+      const promises = orderedIds.map((id, i) => {
         const position = i * 1000;
-        await jsonFetch(`/api/books/${bookId}/notes`, {
+        return jsonFetch(`/api/books/${bookId}/notes`, {
           method: 'PUT',
           body: JSON.stringify({ id, position })
         });
-      }
+      });
+      await Promise.all(promises);
     } catch (e: any) {
       setError(e.message);
       refresh(); // Revert on error
