@@ -23,7 +23,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
   const debug = url.searchParams.get('debug') === '1';
   try {
     await ensureBookOwnership(supabase, bookId, user.id);
-    let charsRes: any = await supabase.from('book_characters').select('id,book_id,name,notes,position,created_at,updated_at').eq('book_id', bookId).order('position', { ascending: true });
+    let charsRes: any = await supabase.from('book_characters').select('id,book_id,name,notes,position,created_at,updated_at,deleted_at').eq('book_id', bookId).is('deleted_at', null).order('position', { ascending: true });
     if (charsRes.error && /notes/.test(charsRes.error.message || '')) {
       // Fallback if server hasn't applied notes column yet
       charsRes = await supabase.from('book_characters').select('id,book_id,name,position,created_at,updated_at').eq('book_id', bookId).order('position', { ascending: true });
@@ -227,9 +227,35 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     const { data: row, error: selErr } = await supabase.from('book_characters').select('*').eq('id', charId).eq('book_id', bookId).maybeSingle();
     if (selErr) throw selErr;
     if (!row) return NextResponse.json({ error: 'not found' }, { status: 404 });
-    const { error: delErr } = await supabase.from('book_characters').delete().eq('id', charId);
-    if (delErr) throw delErr;
-    return NextResponse.json({ deleted: true });
+    const { error: updErr } = await supabase.from('book_characters').update({ deleted_at: new Date().toISOString() }).eq('id', charId);
+    if (updErr) throw updErr;
+    return NextResponse.json({ deleted: true, soft: true });
+  } catch (e: any) {
+    const status = e.message === 'not found' ? 404 : 500;
+    return NextResponse.json({ error: e.message }, { status });
+  }
+}
+
+// Restore soft-deleted character (?restore=<id>)
+export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  if (!isSupabaseEnabled) return NextResponse.json({ disabled: true }, { status: 400 });
+  const { searchParams } = new URL(req.url);
+  const restoreId = searchParams.get('restore');
+  if (!restoreId) return NextResponse.json({ error: 'restore id required' }, { status: 400 });
+  const { id: bookId } = await context.params;
+  const authHeader = req.headers.get('authorization');
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+  const supabase = createServerSupabase(token);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  try {
+    await ensureBookOwnership(supabase, bookId, user.id);
+    const { data: row, error: selErr } = await supabase.from('book_characters').select('id').eq('id', restoreId).eq('book_id', bookId).maybeSingle();
+    if (selErr) throw selErr;
+    if (!row) return NextResponse.json({ error: 'not found' }, { status: 404 });
+    const { error: updErr } = await supabase.from('book_characters').update({ deleted_at: null }).eq('id', restoreId);
+    if (updErr) throw updErr;
+    return NextResponse.json({ restored: true });
   } catch (e: any) {
     const status = e.message === 'not found' ? 404 : 500;
     return NextResponse.json({ error: e.message }, { status });

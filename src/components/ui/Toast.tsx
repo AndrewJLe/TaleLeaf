@@ -9,6 +9,8 @@ interface ToastProps {
   type?: 'success' | 'error' | 'info';
   position?: 'top-right' | 'relative';
   className?: string;
+  actionLabel?: string;
+  onAction?: () => void | Promise<void>;
 }
 
 export const Toast: React.FC<ToastProps> = ({
@@ -18,7 +20,9 @@ export const Toast: React.FC<ToastProps> = ({
   duration = 3000,
   type = 'success',
   position = 'top-right',
-  className = ''
+  className = '',
+  actionLabel,
+  onAction
 }) => {
   useEffect(() => {
     if (isVisible) {
@@ -48,9 +52,17 @@ export const Toast: React.FC<ToastProps> = ({
     : 'relative';
 
   return (
-    <div className={`${positionClasses} flex items-center gap-2 px-4 py-3 rounded-lg border shadow-lg animate-in slide-in-from-top-2 ${typeStyles[type]} ${className}`}>
+    <div className={`${positionClasses} flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg animate-in slide-in-from-top-2 ${typeStyles[type]} ${className}`}>
       <CheckIcon size={16} className={iconColor[type]} />
-      <span className="text-sm font-medium">{message}</span>
+      <span className="text-sm font-medium whitespace-pre-wrap">{message}</span>
+      {actionLabel && (
+        <button
+          onClick={async () => { await onAction?.(); onHide(); }}
+          className="ml-2 text-xs font-semibold px-2 py-1 rounded bg-white/60 hover:bg-white transition-colors border border-white/70"
+        >
+          {actionLabel}
+        </button>
+      )}
     </div>
   );
 };
@@ -61,23 +73,27 @@ export const useToast = () => {
     message: string;
     type: 'success' | 'error' | 'info';
     isVisible: boolean;
+    actionLabel?: string;
+    onAction?: () => void | Promise<void>;
+    duration?: number;
   }>({
     message: '',
     type: 'success',
     isVisible: false
   });
 
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
-    setToast({ message, type, isVisible: true });
+  const showToast = (opts: { message: string; type?: 'success' | 'error' | 'info'; actionLabel?: string; onAction?: () => void | Promise<void>; duration?: number; }) => {
+    setToast({
+      message: opts.message,
+      type: opts.type || 'success',
+      isVisible: true,
+      actionLabel: opts.actionLabel,
+      onAction: opts.onAction,
+      duration: opts.duration
+    });
   };
 
-  const hideToast = () => {
-    setToast(prev => ({ ...prev, isVisible: false }));
-  };
+  const hideToast = () => setToast(prev => ({ ...prev, isVisible: false }));
 
-  return {
-    toast,
-    showToast,
-    hideToast
-  };
+  return { toast, showToast, hideToast };
 };

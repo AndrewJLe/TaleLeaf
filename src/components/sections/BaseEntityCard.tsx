@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { featureFlags } from '../../constants/featureFlags';
 import { TAG_PALETTE, colorForTagName, hexToRgba, isValidSimpleTag, readableTextColor } from '../../lib/tag-colors';
+import { trackEntityDeleted } from '../../lib/telemetry';
 import { Button } from '../ui/Button';
 import { ChevronDownIcon, ChevronUpIcon, SaveIcon, TrashIcon, UndoIcon } from '../ui/Icons';
 import { ResizableTextArea } from '../ui/ResizableTextArea';
@@ -160,6 +162,21 @@ export function BaseEntityCard<T extends BaseEntity>({
   const handleRemoveTag = (tag: string) => {
     const updated = { ...entity, tags: (entity.tags || []).filter(t => t !== tag) } as T;
     onUpdateEntity(index, updated);
+  };
+
+  // Delete confirmation state
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteInFlight, setDeleteInFlight] = useState(false);
+
+  const performDelete = async () => {
+    setDeleteInFlight(true);
+    try {
+      onDelete(index);
+      trackEntityDeleted(config.entityType, { soft: true });
+    } finally {
+      setDeleteInFlight(false);
+      setConfirmingDelete(false);
+    }
   };
 
   const renderNameField = () => {
@@ -431,7 +448,13 @@ export function BaseEntityCard<T extends BaseEntity>({
               id={`delete-${config.entityType}-${entity.id}`}
             >
               <Button
-                onClick={() => onDelete(index)}
+                onClick={() => {
+                  if (featureFlags.confirmDeleteEntities) {
+                    setConfirmingDelete(true);
+                  } else {
+                    performDelete();
+                  }
+                }}
                 variant="danger"
                 size="sm"
               >
@@ -464,6 +487,31 @@ export function BaseEntityCard<T extends BaseEntity>({
       <div className="pointer-events-none absolute inset-0 z-20 transform -translate-x-full -translate-y-full group-hover:translate-x-full group-hover:translate-y-full transition-transform duration-900 ease-out will-change-transform">
         <div className="absolute left-0 top-[-10%] -translate-y-1/4 bg-gradient-to-r from-transparent via-white/70 to-transparent w-12 h-[300%] rotate-45 -skew-x-12 opacity-80 blur-md"></div>
       </div>
+
+      {confirmingDelete && featureFlags.confirmDeleteEntities && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white border border-red-200 rounded-xl shadow-lg p-5 w-full max-w-sm">
+            <h4 className="text-sm font-semibold text-gray-900 mb-2">Delete {config.entityType}?</h4>
+            <p className="text-xs text-gray-600 mb-4">This will remove this {config.entityType} from active view. (Soft-deleted)</p>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setConfirmingDelete(false)}
+                disabled={deleteInFlight}
+                className="flex-1"
+              >Cancel</Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={performDelete}
+                disabled={deleteInFlight}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+              >{deleteInFlight ? 'Deleting…' : 'Delete'}</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

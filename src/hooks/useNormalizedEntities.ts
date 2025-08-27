@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabaseClient } from '../lib/supabase-client';
+import { trackEntityRestored } from '../lib/telemetry';
 import { BookNote, Chapter, Character, Location } from '../types/book';
 
 interface BaseResult<T> {
@@ -11,6 +12,8 @@ interface BaseResult<T> {
   update: (id: string, patch: Partial<T>) => Promise<T | null>;
   remove: (id: string) => Promise<boolean>;
   reorder: (orderedIds: string[]) => Promise<void>;
+  lastRemoved?: { id: string; entity: T } | null;
+  undoRemove?: () => Promise<boolean>;
 }
 
 async function jsonFetch<T>(url: string, options?: RequestInit, attempt = 1): Promise<T> {
@@ -102,12 +105,25 @@ export function useNormalizedCharacters(bookId: string, enable: boolean): BaseRe
     }
   }, [bookId, enable, items]);
 
+  const [lastRemoved, setLastRemoved] = useState<{ id: string; entity: Character } | null>(null);
   const remove = useCallback(async (id: string) => {
     if (!enable) return false;
+    const existing = items.find(c => c.id === id);
     await jsonFetch(`/api/books/${bookId}/characters?id=${id}`, { method: 'DELETE' });
+    if (existing) setLastRemoved({ id, entity: existing });
     setItems(prev => prev.filter(c => c.id !== id));
     return true;
-  }, [bookId, enable]);
+  }, [bookId, enable, items]);
+  const undoRemove = useCallback(async () => {
+    if (!enable || !lastRemoved) return false;
+    try {
+      await jsonFetch(`/api/books/${bookId}/characters?restore=${lastRemoved.id}`, { method: 'PATCH' });
+      setItems(prev => [...prev, lastRemoved.entity]);
+      trackEntityRestored('character');
+      setLastRemoved(null);
+      return true;
+    } catch { return false; }
+  }, [bookId, enable, lastRemoved]);
 
   const reorder = useCallback(async (orderedIds: string[]) => {
     if (!enable) return;
@@ -135,7 +151,7 @@ export function useNormalizedCharacters(bookId: string, enable: boolean): BaseRe
     }
   }, [bookId, enable, items, refresh]);
 
-  return { items, loading, error, refresh, create, update, remove, reorder };
+  return { items, loading, error, refresh, create, update, remove, reorder, lastRemoved, undoRemove };
 }
 
 export function useNormalizedChapters(bookId: string, enable: boolean): BaseResult<Chapter> {
@@ -177,7 +193,9 @@ export function useNormalizedChapters(bookId: string, enable: boolean): BaseResu
       throw e;
     }
   }, [bookId, enable, items]);
-  const remove = useCallback(async (id: string) => { if (!enable) return false; await jsonFetch(`/api/books/${bookId}/chapters?id=${id}`, { method: 'DELETE' }); setItems(prev => prev.filter(c => c.id !== id)); return true; }, [bookId, enable]);
+  const [lastRemoved, setLastRemoved] = useState<{ id: string; entity: Chapter } | null>(null);
+  const remove = useCallback(async (id: string) => { if (!enable) return false; const existing = items.find(c => c.id === id); await jsonFetch(`/api/books/${bookId}/chapters?id=${id}`, { method: 'DELETE' }); if (existing) setLastRemoved({ id, entity: existing }); setItems(prev => prev.filter(c => c.id !== id)); return true; }, [bookId, enable, items]);
+  const undoRemove = useCallback(async () => { if (!enable || !lastRemoved) return false; try { await jsonFetch(`/api/books/${bookId}/chapters?restore=${lastRemoved.id}`, { method: 'PATCH' }); setItems(prev => [...prev, lastRemoved.entity]); trackEntityRestored('chapter'); setLastRemoved(null); return true; } catch { return false; } }, [bookId, enable, lastRemoved]);
   const reorder = useCallback(async (orderedIds: string[]) => {
     if (!enable) return;
     try {
@@ -193,7 +211,7 @@ export function useNormalizedChapters(bookId: string, enable: boolean): BaseResu
       }
     } catch (e: any) { setError(e.message); refresh(); }
   }, [bookId, enable, items, refresh]);
-  return { items, loading, error, refresh, create, update, remove, reorder };
+  return { items, loading, error, refresh, create, update, remove, reorder, lastRemoved, undoRemove };
 }
 
 export function useNormalizedLocations(bookId: string, enable: boolean): BaseResult<Location> {
@@ -225,7 +243,9 @@ export function useNormalizedLocations(bookId: string, enable: boolean): BaseRes
       throw e;
     }
   }, [bookId, enable, items]);
-  const remove = useCallback(async (id: string) => { if (!enable) return false; await jsonFetch(`/api/books/${bookId}/locations?id=${id}`, { method: 'DELETE' }); setItems(prev => prev.filter(l => l.id !== id)); return true; }, [bookId, enable]);
+  const [lastRemoved, setLastRemoved] = useState<{ id: string; entity: Location } | null>(null);
+  const remove = useCallback(async (id: string) => { if (!enable) return false; const existing = items.find(l => l.id === id); await jsonFetch(`/api/books/${bookId}/locations?id=${id}`, { method: 'DELETE' }); if (existing) setLastRemoved({ id, entity: existing }); setItems(prev => prev.filter(l => l.id !== id)); return true; }, [bookId, enable, items]);
+  const undoRemove = useCallback(async () => { if (!enable || !lastRemoved) return false; try { await jsonFetch(`/api/books/${bookId}/locations?restore=${lastRemoved.id}`, { method: 'PATCH' }); setItems(prev => [...prev, lastRemoved.entity]); trackEntityRestored('location'); setLastRemoved(null); return true; } catch { return false; } }, [bookId, enable, lastRemoved]);
   const reorder = useCallback(async (orderedIds: string[]) => {
     if (!enable) return;
     try {
@@ -241,7 +261,7 @@ export function useNormalizedLocations(bookId: string, enable: boolean): BaseRes
       }
     } catch (e: any) { setError(e.message); refresh(); }
   }, [bookId, enable, items, refresh]);
-  return { items, loading, error, refresh, create, update, remove, reorder };
+  return { items, loading, error, refresh, create, update, remove, reorder, lastRemoved, undoRemove };
 }
 
 // Normalized Notes (BookNote) - immediate persistence like other entities
@@ -329,22 +349,22 @@ export function useNormalizedNotes(bookId: string, enable: boolean = true) {
     }
   }, [bookId, enable, items]);
 
+  const [lastRemoved, setLastRemoved] = useState<{ id: string; entity: BookNote } | null>(null);
   const remove = useCallback(async (id: string) => {
     if (!enable) return false;
-    // Optimistic update
     const existing = items.find(n => n.id === id);
     setItems(prev => prev.filter(n => n.id !== id));
-
     try {
       await jsonFetch(`/api/books/${bookId}/notes?id=${id}`, { method: 'DELETE' });
+      if (existing) setLastRemoved({ id, entity: existing });
       return true;
     } catch (e: any) {
       setError(e.message);
-      // Revert optimistic update
       if (existing) setItems(prev => [...prev, existing].sort((a, b) => (a.position || 0) - (b.position || 0)));
       return false;
     }
   }, [bookId, enable, items]);
+  const undoRemove = useCallback(async () => { if (!enable || !lastRemoved) return false; try { await jsonFetch(`/api/books/${bookId}/notes?restore=${lastRemoved.id}`, { method: 'PATCH' }); setItems(prev => [...prev, lastRemoved.entity]); trackEntityRestored('note'); setLastRemoved(null); return true; } catch { return false; } }, [bookId, enable, lastRemoved]);
 
   const reorder = useCallback(async (orderedIds: string[]) => {
     if (!enable) return;
@@ -371,5 +391,5 @@ export function useNormalizedNotes(bookId: string, enable: boolean = true) {
     }
   }, [bookId, enable, items, refresh]);
 
-  return { items, loading, error, refresh, create, update, remove, reorder };
+  return { items, loading, error, refresh, create, update, remove, reorder, lastRemoved, undoRemove };
 }

@@ -23,6 +23,7 @@ import { RateLimitsModal } from "./ui/RateLimitsModal";
 import { SaveStatus } from "./ui/SaveStatus";
 import { SplitLayout } from "./ui/SplitLayout";
 import { TabNavigation } from "./ui/TabNavigation";
+import { Toast, useToast } from "./ui/Toast";
 import { TokenConfirmDialog } from "./ui/TokenConfirmDialog";
 import { Tooltip } from "./ui/Tooltip";
 
@@ -119,7 +120,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
 
     const [tokenConfirm, setTokenConfirm] = useState<{ isOpen: boolean; estimate: TokenEstimate | null; action: string; onConfirm: () => void | Promise<void>; }>({ isOpen: false, estimate: null, action: '', onConfirm: () => { } });
     const [isEditingTitle, setIsEditingTitle] = useState(false);
-    
+
     // Note editing state (similar to CharactersSection)
     const [editingNoteName, setEditingNoteName] = useState<Record<string, boolean>>({});
     const [noteNameDrafts, setNoteNameDrafts] = useState<Record<string, string>>({});
@@ -266,7 +267,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     // Discard all note changes
     const handleDiscardAllNotes = () => {
         const dirtyIds = Object.keys(dirtyNotes).filter(id => dirtyNotes[id]);
-        
+
         // Clear all drafts and mark as clean
         setNoteDrafts(prev => {
             const newDrafts = { ...prev };
@@ -287,13 +288,36 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         if (t === 'locations' && locationsSaveAllRef.current) return locationsSaveAllRef.current();
         if (t === 'notes') return handleSaveAllNotes();
     }, [handleSaveAllNotes]);
-    
+
     const handleTabDiscardChanges = useCallback((t: TabType) => {
         if (t === 'characters') charactersDiscardAllRef.current?.();
         if (t === 'chapters') chaptersDiscardAllRef.current?.();
         if (t === 'locations') locationsDiscardAllRef.current?.();
         if (t === 'notes') handleDiscardAllNotes();
     }, [handleDiscardAllNotes]);
+
+    // Undo toast integration for soft-deleted entities
+    const { toast, showToast, hideToast } = useToast();
+    useEffect(() => {
+        const sources: { label: string; lastRemoved?: any; undo?: () => Promise<boolean> }[] = [
+            { label: 'Character', lastRemoved: normalizedCharacters.lastRemoved, undo: normalizedCharacters.undoRemove },
+            { label: 'Chapter', lastRemoved: normalizedChapters.lastRemoved, undo: normalizedChapters.undoRemove },
+            { label: 'Location', lastRemoved: normalizedLocations.lastRemoved, undo: normalizedLocations.undoRemove },
+            { label: 'Note', lastRemoved: normalizedNotes.lastRemoved, undo: normalizedNotes.undoRemove }
+        ];
+        for (const src of sources) {
+            if (src.lastRemoved) {
+                showToast({
+                    message: `${src.label} deleted.`,
+                    type: 'info',
+                    actionLabel: 'Undo',
+                    duration: 8000,
+                    onAction: async () => { await src.undo?.(); }
+                });
+                break; // show only one at a time
+            }
+        }
+    }, [normalizedCharacters.lastRemoved, normalizedChapters.lastRemoved, normalizedLocations.lastRemoved, normalizedNotes.lastRemoved]);
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 p-4">
@@ -504,7 +528,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                         </Tooltip>
                                                     </div>
                                                 </div>
-                                                
+
                                                 {/* Manual Add Note */}
                                                 <div className="flex flex-col sm:flex-row gap-3">
                                                     <input
@@ -564,7 +588,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                         notes: note.body || '',
                                                         tags: note.tags || []
                                                     };
-                                                    
+
                                                     return (
                                                         <BaseEntityCard
                                                             key={note.id}
@@ -703,6 +727,15 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                 onCancel={() => setTokenConfirm({ ...tokenConfirm, isOpen: false })}
                 estimate={tokenConfirm.estimate!}
                 action={tokenConfirm.action}
+            />
+            <Toast
+                message={toast.message}
+                isVisible={toast.isVisible}
+                onHide={hideToast}
+                type={toast.type}
+                duration={toast.duration}
+                actionLabel={toast.actionLabel}
+                onAction={toast.onAction}
             />
             {/* FeatureFlagDebug removed */}
         </div>

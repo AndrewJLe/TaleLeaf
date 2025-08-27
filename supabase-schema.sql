@@ -90,6 +90,7 @@ create table if not exists book_notes (
   position int, -- manual ordering (can be sparse; client may re-pack)
   spoiler_protected boolean not null default false,
   min_visible_page int, -- spoiler unlock threshold (nullable)
+  deleted_at timestamptz, -- soft delete tombstone
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -106,6 +107,7 @@ create table if not exists book_locations (
   notes text default '',
   position int,
   depth int not null default 0,
+  deleted_at timestamptz, -- soft delete tombstone
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
   constraint book_locations_depth_check check (depth >= 0 and depth <= 10)
@@ -325,6 +327,7 @@ create table if not exists book_characters (
   name text not null,
   notes text default '',
   position int,
+  deleted_at timestamptz, -- soft delete tombstone
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -338,6 +341,7 @@ create table if not exists book_chapters (
   summary text default '',          -- concise summary (AI or manual)
   analysis text default '',         -- deeper analysis / themes
   position int,
+  deleted_at timestamptz, -- soft delete tombstone
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );

@@ -6,6 +6,8 @@ interface FeatureFlags {
   locationsV2: boolean;
   aiSummaries: boolean;
   collabPreview: boolean;
+  confirmDeleteEntities: boolean; // show confirm dialog before deleting entity cards
+  telemetryBasic: boolean; // enable lightweight client telemetry events
 }
 
 // Parse query parameters for flag overrides (dev/testing)
@@ -19,7 +21,7 @@ function parseQueryFlags(): Partial<FeatureFlags> {
   const flags: Partial<FeatureFlags> = {};
   flagParam.split(',').forEach(flag => {
     const [key, value] = flag.split(':');
-    if (key && ['notesV2', 'locationsV2', 'aiSummaries', 'collabPreview'].includes(key)) {
+    if (key && ['notesV2', 'locationsV2', 'aiSummaries', 'collabPreview', 'confirmDeleteEntities', 'telemetryBasic'].includes(key)) {
       flags[key as keyof FeatureFlags] = value !== 'off' && value !== 'false';
     }
   });
@@ -34,7 +36,10 @@ function getFeatureFlags(): FeatureFlags {
     notesV2: true,
     locationsV2: false,
     aiSummaries: false,
-    collabPreview: false
+    collabPreview: false,
+    confirmDeleteEntities: true,
+    telemetryBasic: true,
+    // Soft delete is now always on (deleted_at columns); flag removed
   };
 
   if (typeof window === 'undefined') return defaults;
