@@ -55,6 +55,7 @@ export const AllNotesSection: React.FC<AllNotesSectionProps> = ({
   onDiscardAllRef
 }) => {
   const [query, setQuery] = useState('');
+  const [filterMode, setFilterMode] = useState<'AND' | 'OR'>('AND');
 
   // Draft/save state keyed by composite key
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -93,8 +94,14 @@ export const AllNotesSection: React.FC<AllNotesSectionProps> = ({
   const tokens = useMemo(() => query.toLowerCase().split(/[\s,]+/).map(t => t.trim()).filter(Boolean), [query]);
   const filtered = useMemo(() => {
     if (tokens.length === 0) return aggregated;
-    return aggregated.filter(item => tokens.every(t => (item.tags || []).some(tag => tag.toLowerCase().includes(t))));
-  }, [aggregated, tokens]);
+    return aggregated.filter(item => {
+      const lcTags = (item.tags || []).map(tag => tag.toLowerCase());
+      if (filterMode === 'AND') {
+        return tokens.every(t => lcTags.some(tag => tag.includes(t)));
+      }
+      return tokens.some(t => lcTags.some(tag => tag.includes(t)));
+    });
+  }, [aggregated, tokens, filterMode]);
 
   // Unsaved changes tracking for modal
   const dirtyCount = useMemo(() => Object.values(dirty).filter(Boolean).length, [dirty]);
@@ -223,46 +230,101 @@ export const AllNotesSection: React.FC<AllNotesSectionProps> = ({
               <SaveStatus isSaving={headerSaving} lastSaved={lastSaved} error={saveError} className="mt-0.5" />
             </div>
           </div>
-          <div className="flex-1 sm:max-w-sm">
-            <input
-              type="text"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Search by tag (e.g. suspect, alibi)"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors bg-white"
-            />
+          <div className="flex items-center gap-2 w-full sm:max-w-xl">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search by tag (e.g. suspect, alibi)"
+                className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors bg-white"
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 px-2 py-1"
+                  aria-label="Clear search"
+                  title="Clear search"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+            <div className="inline-flex rounded-md bg-gray-100 p-1">
+              <button
+                type="button"
+                onClick={() => setFilterMode('AND')}
+                className={`px-3 py-1.5 text-xs font-medium rounded ${filterMode === 'AND' ? 'bg-white shadow text-gray-900' : 'text-gray-600 hover:text-gray-900'}`}
+                title="Match all tags"
+              >
+                AND
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterMode('OR')}
+                className={`px-3 py-1.5 text-xs font-medium rounded ${filterMode === 'OR' ? 'bg-white shadow text-gray-900' : 'text-gray-600 hover:text-gray-900'}`}
+                title="Match any tag"
+              >
+                OR
+              </button>
+            </div>
           </div>
         </div>
         <p className="text-xs text-gray-500">Type tag(s) to filter. Matches tags containing your query. Separate multiple tags with space or comma.</p>
       </div>
 
       <div className="space-y-4">
-        {filtered.map((item, index) => (
-          <BaseEntityCard
-            key={item.key}
-            entity={{ id: item.id, name: nameDrafts[item.key] ?? item.name, notes: getDisplayValue(item), tags: item.tags }}
-            index={index}
-            totalCount={filtered.length}
-            config={cardConfigBySource[item.source]}
-            displayValue={getDisplayValue(item)}
-            isDirty={!!dirty[item.key]}
-            isSaving={!!saving[item.key]}
-            showSaved={!!showSaved[item.key]}
-            onUpdateEntity={(_i, entity) => updateImmediate(item, { name: (entity as any).name, tags: (entity as any).tags }) as any}
-            onNotesChange={(entity) => handleNotesChange(item, (entity as any).notes)}
-            onSave={() => handleSave(item)}
-            onCancel={() => handleCancel(item)}
-            onMove={handleMove}
-            onDelete={() => handleDelete(index)}
-            editingName={!!editingName[item.key]}
-            nameDraft={nameDrafts[item.key] ?? item.name}
-            onStartNameEdit={() => startNameEdit(item.key, item.name)}
-            onNameChange={(v) => changeNameDraft(item.key, v)}
-            onFinishNameEdit={(save) => finishNameEdit(item.key, save)}
-            tagColorMap={tagColorMap}
-            onPersistTagColor={onPersistTagColor}
-          />
-        ))}
+        {filtered.map((item, index) => {
+          const baseCfg = cardConfigBySource[item.source];
+          const badgeClassMap: Record<AllNotesSource, string> = {
+            character: 'bg-amber-100 text-amber-700',
+            chapter: 'bg-blue-100 text-blue-700',
+            location: 'bg-purple-100 text-purple-700',
+            note: 'bg-orange-100 text-orange-700'
+          };
+          const labelMap: Record<AllNotesSource, string> = {
+            character: 'Character',
+            chapter: 'Chapter',
+            location: 'Location',
+            note: 'Note'
+          };
+          const config: EntityCardConfig = {
+            ...baseCfg,
+            showSpecialActions: (
+              <span className={`px-2 py-0.5 rounded text-xs font-medium ${badgeClassMap[item.source]}`}>
+                {labelMap[item.source]}
+              </span>
+            )
+          };
+          return (
+            <BaseEntityCard
+              key={item.key}
+              entity={{ id: item.id, name: nameDrafts[item.key] ?? item.name, notes: getDisplayValue(item), tags: item.tags }}
+              index={index}
+              totalCount={filtered.length}
+              config={config}
+              displayValue={getDisplayValue(item)}
+              isDirty={!!dirty[item.key]}
+              isSaving={!!saving[item.key]}
+              showSaved={!!showSaved[item.key]}
+              onUpdateEntity={(_i, entity) => updateImmediate(item, { name: (entity as any).name, tags: (entity as any).tags }) as any}
+              onNotesChange={(entity) => handleNotesChange(item, (entity as any).notes)}
+              onSave={() => handleSave(item)}
+              onCancel={() => handleCancel(item)}
+              onMove={handleMove}
+              onDelete={() => handleDelete(index)}
+              editingName={!!editingName[item.key]}
+              nameDraft={nameDrafts[item.key] ?? item.name}
+              onStartNameEdit={() => startNameEdit(item.key, item.name)}
+              onNameChange={(v) => changeNameDraft(item.key, v)}
+              onFinishNameEdit={(save) => finishNameEdit(item.key, save)}
+              tagColorMap={tagColorMap}
+              onPersistTagColor={onPersistTagColor}
+              highlightTokens={tokens}
+            />
+          );
+        })}
 
         {filtered.length === 0 && (
           <div className="text-center py-12 text-gray-500">

@@ -191,6 +191,16 @@
 				"lint"
 			],
 			"group": "test"
+		},
+		{
+			"label": "Type Check",
+			"type": "shell",
+			"command": "npx",
+			"args": [
+				"tsc",
+				"--noEmit"
+			],
+			"group": "test"
 		}
 	]
 }
