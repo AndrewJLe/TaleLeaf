@@ -272,7 +272,12 @@ export function BaseEntityCard<T extends BaseEntity>({
                   <div
                     key={tag}
                     className="inline-flex items-center rounded-full px-2 py-0.5 text-xs sm:text-sm font-medium transform transition-transform hover:scale-105 hover:[&>button]:opacity-100"
-                    style={{ backgroundColor: hexToRgba(baseColor, 0.6), color: readableTextColor(baseColor), boxShadow: isHighlighted ? `0 0 0 2px ${baseColor}` : undefined }}
+                    style={{
+                      backgroundColor: hexToRgba(baseColor, 0.6),
+                      color: readableTextColor(baseColor),
+                      boxShadow: isHighlighted ? `0 0 0 2px ${baseColor}, 0 0 6px 2px ${hexToRgba(baseColor, 0.35)}` : undefined,
+                      filter: isHighlighted ? 'brightness(1.08)' : undefined
+                    }}
                   >
                     <span className="truncate max-w-[10rem]">{tag}</span>
                     <button

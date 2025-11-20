@@ -56,6 +56,12 @@ export const AllNotesSection: React.FC<AllNotesSectionProps> = ({
 }) => {
   const [query, setQuery] = useState('');
   const [filterMode, setFilterMode] = useState<'AND' | 'OR'>('AND');
+  const removeToken = (tok: string) => {
+    const current = tokens;
+    const next = current.filter(t => t !== tok);
+    // rebuild query string roughly as space separated
+    setQuery(next.join(' '));
+  };
 
   // Draft/save state keyed by composite key
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -271,7 +277,34 @@ export const AllNotesSection: React.FC<AllNotesSectionProps> = ({
             </div>
           </div>
         </div>
-        <p className="text-xs text-gray-500">Type tag(s) to filter. Matches tags containing your query. Separate multiple tags with space or comma.</p>
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-gray-500">
+            Type tag(s) to filter. Use AND/OR toggle: AND requires all tokens match at least one tag; OR shows items if any token matches.
+          </p>
+          {tokens.length > 0 && (
+            <div className="flex flex-wrap gap-2" aria-label="Active tag filters">
+              {tokens.map(t => (
+                <button
+                  key={t + '-pill'}
+                  onClick={() => removeToken(t)}
+                  className="group inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200 hover:text-orange-800 transition-colors"
+                  title="Click to remove token"
+                >
+                  <span>{t}</span>
+                  <span className="text-orange-500 group-hover:text-orange-700 font-bold">×</span>
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200 hover:text-gray-800"
+                title="Clear all tokens"
+              >
+                Clear
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="space-y-4">
