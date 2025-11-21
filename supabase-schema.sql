@@ -608,3 +608,150 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 -- 10. Schema Version Marker --------------------------------------------
 -- Current logical schema version: 2025-08-25-phase3.0
 -- =====================================================================
+
+-- =====================================================================
+-- Phase 4 Context Window (Summaries, Embeddings, pgvector)
+-- Adds:
+--   * pgvector extension for semantic search
+--   * book_chapter_map (page boundaries)
+--   * book_page_chunks (paragraph chunks + embeddings)
+--   * book_paragraph_summaries, book_page_summaries, book_chapter_summaries (JSON rollups)
+--   * Supporting indexes + RLS policies
+-- =====================================================================
+
+create extension if not exists vector;
+
+create table if not exists book_chapter_map (
+  id uuid primary key default gen_random_uuid(),
+  book_id uuid not null references books(id) on delete cascade,
+  chapter_index int not null,
+  start_page int not null,
+  end_page int not null,
+  title text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique (book_id, chapter_index)
+);
+
+create table if not exists book_page_chunks (
+  id uuid primary key default gen_random_uuid(),
+  book_id uuid not null references books(id) on delete cascade,
+  page_number int not null,
+  intra_index int not null,
+  raw_text text not null,
+  token_count int,
+  embedding vector(1536),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique (book_id, page_number, intra_index)
+);
+
+create table if not exists book_paragraph_summaries (
+  id uuid primary key default gen_random_uuid(),
+  book_id uuid not null references books(id) on delete cascade,
+  chunk_id uuid not null references book_page_chunks(id) on delete cascade,
+  summary_json jsonb not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique (chunk_id)
+);
+
+create table if not exists book_page_summaries (
+  id uuid primary key default gen_random_uuid(),
+  book_id uuid not null references books(id) on delete cascade,
+  page_number int not null,
+  summary_json jsonb not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique (book_id, page_number)
+);
+
+create table if not exists book_chapter_summaries (
+  id uuid primary key default gen_random_uuid(),
+  book_id uuid not null references books(id) on delete cascade,
+  chapter_index int not null,
+  summary_json jsonb not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique (book_id, chapter_index)
+);
+
+create index if not exists idx_chunks_book_page on book_page_chunks (book_id, page_number);
+create index if not exists idx_page_summ_book_page on book_page_summaries (book_id, page_number);
+create index if not exists idx_chapter_map_book_chapter on book_chapter_map (book_id, chapter_index);
+create index if not exists idx_chunks_embedding_ivf on book_page_chunks using ivfflat (embedding vector_cosine_ops) with (lists = 100);
+
+alter table if exists book_chapter_map enable row level security;
+alter table if exists book_page_chunks enable row level security;
+alter table if exists book_paragraph_summaries enable row level security;
+alter table if exists book_page_summaries enable row level security;
+alter table if exists book_chapter_summaries enable row level security;
+
+do $$ begin
+  create policy book_chapter_map_isolation on book_chapter_map for all using (
+    exists (select 1 from books b where b.id = book_id and b.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from books b where b.id = book_id and b.user_id = auth.uid())
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy book_page_chunks_isolation on book_page_chunks for all using (
+    exists (select 1 from books b where b.id = book_id and b.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from books b where b.id = book_id and b.user_id = auth.uid())
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy book_paragraph_summaries_isolation on book_paragraph_summaries for all using (
+    exists (select 1 from books b where b.id = book_id and b.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from books b where b.id = book_id and b.user_id = auth.uid())
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy book_page_summaries_isolation on book_page_summaries for all using (
+    exists (select 1 from books b where b.id = book_id and b.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from books b where b.id = book_id and b.user_id = auth.uid())
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy book_chapter_summaries_isolation on book_chapter_summaries for all using (
+    exists (select 1 from books b where b.id = book_id and b.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from books b where b.id = book_id and b.user_id = auth.uid())
+  );
+exception when duplicate_object then null; end $$;
+
+drop trigger if exists book_chapter_map_touch_book on book_chapter_map;
+create trigger book_chapter_map_touch_book
+after insert or update or delete on book_chapter_map
+for each row execute procedure touch_book();
+
+drop trigger if exists book_page_chunks_touch_book on book_page_chunks;
+create trigger book_page_chunks_touch_book
+after insert or update or delete on book_page_chunks
+for each row execute procedure touch_book();
+
+drop trigger if exists book_paragraph_summaries_touch_book on book_paragraph_summaries;
+create trigger book_paragraph_summaries_touch_book
+after insert or update or delete on book_paragraph_summaries
+for each row execute procedure touch_book();
+
+drop trigger if exists book_page_summaries_touch_book on book_page_summaries;
+create trigger book_page_summaries_touch_book
+after insert or update or delete on book_page_summaries
+for each row execute procedure touch_book();
+
+drop trigger if exists book_chapter_summaries_touch_book on book_chapter_summaries;
+create trigger book_chapter_summaries_touch_book
+after insert or update or delete on book_chapter_summaries
+for each row execute procedure touch_book();
+
+-- Updated schema version marker
+-- Current logical schema version: 2025-09-05-phase4.0
+-- =====================================================================

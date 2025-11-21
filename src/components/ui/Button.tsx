@@ -21,7 +21,7 @@ export const Button: React.FC<ButtonProps> = ({
     const variantClasses = {
         primary: 'bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-500 shadow-sm hover:shadow-lg',
         secondary: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 focus:ring-emerald-500 border border-emerald-200 hover:border-emerald-300',
-        danger: 'bg-white text-red-600 hover:bg-red-50 focus:ring-red-500 border border-red-200 hover:border-red-300',
+        danger: 'bg-red-100 text-red-600 hover:bg-red-200 focus:ring-red-500 border border-red-200 hover:border-red-300',
         ghost: 'text-emerald-600 hover:bg-emerald-50 focus:ring-emerald-500 hover:text-emerald-700'
     };
 

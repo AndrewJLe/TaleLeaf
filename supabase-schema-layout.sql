@@ -143,3 +143,59 @@ CREATE TABLE public.profiles (
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
+CREATE TABLE public.book_chapter_map (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  book_id uuid NOT NULL,
+  chapter_index integer NOT NULL,
+  start_page integer NOT NULL,
+  end_page integer NOT NULL,
+  title text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT book_chapter_map_pkey PRIMARY KEY (id),
+  CONSTRAINT book_chapter_map_book_id_fkey FOREIGN KEY (book_id) REFERENCES public.books(id)
+);
+CREATE TABLE public.book_page_chunks (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  book_id uuid NOT NULL,
+  page_number integer NOT NULL,
+  intra_index integer NOT NULL,
+  raw_text text NOT NULL,
+  token_count integer,
+  embedding vector(1536),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT book_page_chunks_pkey PRIMARY KEY (id),
+  CONSTRAINT book_page_chunks_book_id_fkey FOREIGN KEY (book_id) REFERENCES public.books(id)
+);
+CREATE TABLE public.book_paragraph_summaries (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  book_id uuid NOT NULL,
+  chunk_id uuid NOT NULL,
+  summary_json jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT book_paragraph_summaries_pkey PRIMARY KEY (id),
+  CONSTRAINT book_paragraph_summaries_book_id_fkey FOREIGN KEY (book_id) REFERENCES public.books(id),
+  CONSTRAINT book_paragraph_summaries_chunk_id_fkey FOREIGN KEY (chunk_id) REFERENCES public.book_page_chunks(id)
+);
+CREATE TABLE public.book_page_summaries (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  book_id uuid NOT NULL,
+  page_number integer NOT NULL,
+  summary_json jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT book_page_summaries_pkey PRIMARY KEY (id),
+  CONSTRAINT book_page_summaries_book_id_fkey FOREIGN KEY (book_id) REFERENCES public.books(id)
+);
+CREATE TABLE public.book_chapter_summaries (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  book_id uuid NOT NULL,
+  chapter_index integer NOT NULL,
+  summary_json jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT book_chapter_summaries_pkey PRIMARY KEY (id),
+  CONSTRAINT book_chapter_summaries_book_id_fkey FOREIGN KEY (book_id) REFERENCES public.books(id)
+);

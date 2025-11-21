@@ -3,14 +3,17 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { featureFlags } from "../constants/featureFlags";
 import { useAIGeneration } from "../hooks/useAIGeneration";
 import { useBookActions } from "../hooks/useBookActions";
 import { useBookPersistence } from "../hooks/useBookPersistenceNew";
 import { useBookTagGroups } from "../hooks/useBookTagGroups";
 import { useNormalizedChapters, useNormalizedCharacters, useNormalizedLocations, useNormalizedNotes } from "../hooks/useNormalizedEntities";
 import { AIMessage, aiService, TokenEstimate } from "../lib/ai-service";
+import { supabaseClient } from "../lib/supabase-client";
 import { BookEditorProps, TabType } from "../types/book";
 import ContextWindow from "./ContextWindow";
+import { FeatureFlagDebug } from "./FeatureFlagDebug";
 import { AllNotesSection } from "./sections/AllNotesSection";
 import { BaseEntityCard } from "./sections/BaseEntityCard";
 import { ChaptersSection } from "./sections/ChaptersSection";
@@ -78,6 +81,11 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     const notesDiscardAllRef = useRef<(() => void) | null>(null);
 
     const { aiGenerationState, isAILoading, setIsAILoading, setGenerationLoading } = useAIGeneration();
+    const contextWindowV2Enabled = featureFlags.contextWindowV2 && !!supabaseClient;
+    // Local override to help toggle the feature without relying on page reload.
+    const [contextWindowV2Override, setContextWindowV2Override] = useState<boolean | null>(null);
+    const effectiveContextWindowV2 = (contextWindowV2Override ?? featureFlags.contextWindowV2) && !!supabaseClient;
+    const [contextPrepStatus, setContextPrepStatus] = useState<'idle' | 'indexing' | 'ready' | 'error'>('idle');
 
     // Normalized entities
     const normalizedCharacters = useNormalizedCharacters(local.id, true);
@@ -100,12 +108,120 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     const handleContextWindowChange = (start: number, end: number) => { updateBook({ window: { start, end } }); };
     useEffect(() => { if (local.window && typeof local.window.start === 'number') setCurrentDocumentPage(local.window.start); }, [local.window?.start]);
 
+    const currentUpload = local.uploads?.[0];
+    const currentPageText = currentUpload?.pages ? (currentUpload.pages[currentDocumentPage - 1] || '') : '';
+
+    const fetchContextWindowPayload = useCallback(async (question: string) => {
+        if (!contextWindowV2Enabled || !supabaseClient) return null;
+        try {
+            const session = await supabaseClient.auth.getSession();
+            const token = session.data.session?.access_token;
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const response = await fetch(`/api/books/${local.id}/context-window`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    question,
+                    window: { type: 'pages', start: local.window.start, end: local.window.end },
+                    maxContextTokens: 1800
+                })
+            });
+
+            if (response.status === 202) {
+                setContextPrepStatus('indexing');
+                return null; // data still processing, fallback to legacy context
+            }
+
+            if (!response.ok) {
+                console.warn('Context window request failed', await response.json().catch(() => null));
+                setContextPrepStatus('error');
+                return null;
+            }
+
+            const payload = await response.json();
+            if (!payload?.ready || !payload.result?.systemPrompt) return null;
+            setContextPrepStatus('ready');
+            return payload;
+        } catch (error) {
+            console.warn('Context window fetch error', error);
+            return null;
+        }
+    }, [contextWindowV2Enabled, local.id, local.window.start, local.window.end]);
+
+    const triggerContextPreprocess = useCallback(async () => {
+        if (!contextWindowV2Enabled || !supabaseClient) return;
+        try {
+            setContextPrepStatus('indexing');
+            const session = await supabaseClient.auth.getSession();
+            const token = session.data.session?.access_token;
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const response = await fetch(`/api/books/${local.id}/context-preprocess`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ pages: currentUpload?.pages })
+            });
+
+            if (!response.ok) {
+                console.warn('Context preprocess request failed', await response.json().catch(() => null));
+                setContextPrepStatus('error');
+                return;
+            }
+
+            const result = await response.json();
+            if (result.status === 'done') {
+                setContextPrepStatus('ready');
+            } else {
+                setContextPrepStatus('error');
+            }
+        } catch (error) {
+            console.warn('Context preprocess error', error);
+            setContextPrepStatus('error');
+        }
+    }, [contextWindowV2Enabled, local.id, currentUpload?.pages]);
+
+    // Automatically build the context index once when CWv2 is enabled and we
+    // have page texts available, so users don't need to click "Build index"
+    // after each refresh. The preprocess route is idempotent and will skip
+    // already-processed pages.
+    useEffect(() => {
+        if (!contextWindowV2Enabled || !supabaseClient) return;
+        if (!currentUpload?.pages || contextPrepStatus !== 'idle') return;
+        // Fire and forget; UI will update contextPrepStatus based on response.
+        void triggerContextPreprocess();
+    }, [contextWindowV2Enabled, currentUpload?.pages, contextPrepStatus, triggerContextPreprocess]);
+
     const handleSendMessage = async () => {
         if (!message.trim() || isAILoading) return;
-        const userMessage: AIMessage = { role: 'user', content: message.trim() };
+        const trimmed = message.trim();
+        const userMessage: AIMessage = { role: 'user', content: trimmed };
         const newChat = [...chat, userMessage];
         setChat(newChat); setMessage(''); setIsAILoading(true);
-        try { const contextText = aiService.extractContextText(local, local.window.start, local.window.end); const response = await aiService.chat(newChat, contextText); setChat([...newChat, { role: 'assistant', content: response }]); } catch { setChat([...newChat, { role: 'assistant', content: 'Sorry, I encountered an error. Please check your AI settings and try again.' }]); } finally { setIsAILoading(false); }
+        try {
+            let systemPromptOverride: string | undefined;
+            let contextText = '';
+            if (contextWindowV2Enabled) {
+                const payload = await fetchContextWindowPayload(trimmed);
+                if (payload?.result?.systemPrompt) {
+                    systemPromptOverride = payload.result.systemPrompt;
+                } else {
+                    contextText = aiService.extractContextText(local, local.window.start, local.window.end);
+                }
+            } else {
+                contextText = aiService.extractContextText(local, local.window.start, local.window.end);
+            }
+
+            const response = await aiService.chat(newChat, contextText, { systemPromptOverride });
+            setChat([...newChat, { role: 'assistant', content: response }]);
+        } catch (error) {
+            console.error('AI chat error', error);
+            setChat([...newChat, { role: 'assistant', content: 'Sorry, I encountered an error. Please check your AI settings and try again.' }]);
+        } finally {
+            setIsAILoading(false);
+        }
     };
 
     const confirmAIAction = (action: string, promptText: string, onConfirm: () => Promise<void>): Promise<void> => new Promise(resolve => {
@@ -115,8 +231,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         setTokenConfirm({ isOpen: true, estimate, action, onConfirm: async () => { await onConfirm(); resolve(); } });
     });
 
-    const currentUpload = local.uploads?.[0];
-    const currentPageText = currentUpload?.pages ? (currentUpload.pages[currentDocumentPage - 1] || '') : '';
+
     const saveCurrentPageText = (value: string) => { if (!currentUpload?.pages) return; const updatedUpload = { ...currentUpload, pages: [...currentUpload.pages] }; updatedUpload.pages[currentDocumentPage - 1] = value; updateBook({ uploads: [updatedUpload] }); };
 
     const handleCharactersUnsavedUpdate = useCallback((has: boolean, count: number) => setCharactersUnsaved({ hasChanges: has, count }), []);
@@ -345,6 +460,9 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                         {local.cover && <img src={local.cover} alt="Cover" className="h-16 w-12 object-cover rounded shadow border" />}
                         <div className="flex items-center gap-2">
                             <Tooltip text="Chat with AI" id="chat-toggle"><Button onClick={() => setShowContextWindow(!showContextWindow)} variant="secondary" size="sm" className="p-2"><MessageSquareIcon size={20} /></Button></Tooltip>
+                            <Tooltip text="Toggle ContextWindow V2 (local override)" id="cw-v2-toggle">
+                                <Button onClick={() => { const next = !(contextWindowV2Override ?? featureFlags.contextWindowV2); setContextWindowV2Override(next); if (next) setShowContextWindow(true); }} variant={(contextWindowV2Override ?? featureFlags.contextWindowV2) ? 'primary' : 'secondary'} size="sm" className="p-2">CWv2</Button>
+                            </Tooltip>
                             <Tooltip text="Settings" id="settings-button"><Button onClick={() => setShowSettings(true)} variant="secondary" size="sm" className="p-2"><SettingsIcon size={20} /></Button></Tooltip>
                             {isPersisting && <div className="text-xs text-gray-500 flex items-center gap-1"><div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>Saving...</div>}
                             {lastSaved && !isPersisting && <div className="text-xs text-gray-400">Saved {lastSaved.toLocaleTimeString()}</div>}
@@ -362,6 +480,28 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                         <div className="p-2 bg-amber-100 rounded-lg"><MessageSquareIcon size={20} className="text-amber-700" /></div>
                                         <h3 className="text-lg font-semibold text-amber-900">AI Chat & Context</h3>
                                     </div>
+                                    {contextWindowV2Enabled && (
+                                        <div className="mb-4 text-xs flex flex-wrap items-center gap-2">
+                                            {contextPrepStatus === 'idle' && (
+                                                <>
+                                                    <span className="text-amber-800">New AI context index is available.</span>
+                                                    <Button size="sm" variant="secondary" onClick={triggerContextPreprocess}>Build index now</Button>
+                                                </>
+                                            )}
+                                            {contextPrepStatus === 'indexing' && (
+                                                <span className="text-amber-700">Building AI context index… You can still chat using the simpler context.</span>
+                                            )}
+                                            {contextPrepStatus === 'ready' && (
+                                                <span className="text-emerald-700">AI context index ready. Answers use richer in-book context within your page window.</span>
+                                            )}
+                                            {contextPrepStatus === 'error' && (
+                                                <>
+                                                    <span className="text-red-700">AI context index failed. Falling back to simpler context.</span>
+                                                    <Button size="sm" variant="secondary" onClick={triggerContextPreprocess}>Retry</Button>
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
                                     <ContextWindow window={local.window} pageCount={pageCount} book={local} onChange={handleContextWindowChange} />
                                     <div className="mt-6 space-y-4 mb-4 max-h-64 overflow-y-auto">
                                         {chat.length === 0 && (
@@ -770,7 +910,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                 actionLabel={toast.actionLabel}
                 onAction={toast.onAction}
             />
-            {/* FeatureFlagDebug removed */}
+            <FeatureFlagDebug />
         </div>
     );
 }
