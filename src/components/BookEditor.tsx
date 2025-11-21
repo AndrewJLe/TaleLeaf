@@ -122,6 +122,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     const handleCharactersUnsavedUpdate = useCallback((has: boolean, count: number) => setCharactersUnsaved({ hasChanges: has, count }), []);
     const handleChaptersUnsavedUpdate = useCallback((has: boolean, count: number) => setChaptersUnsaved({ hasChanges: has, count }), []);
     const handleLocationsUnsavedUpdate = useCallback((has: boolean, count: number) => setLocationsUnsaved({ hasChanges: has, count }), []);
+    const handleAllNotesUnsavedUpdate = useCallback((has: boolean, count: number) => setAllNotesUnsaved({ hasChanges: has, count }), []);
 
     const [tokenConfirm, setTokenConfirm] = useState<{ isOpen: boolean; estimate: TokenEstimate | null; action: string; onConfirm: () => void | Promise<void>; }>({ isOpen: false, estimate: null, action: '', onConfirm: () => { } });
     const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -694,7 +695,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                             notes={normalizedNotes as any}
                                             tagColorMap={tagColorMap}
                                             onPersistTagColor={upsertTag}
-                                            onUnsavedChangesUpdate={(has, count) => setAllNotesUnsaved({ hasChanges: has, count })}
+                                            onUnsavedChangesUpdate={handleAllNotesUnsavedUpdate}
                                             onSaveAllRef={allNotesSaveAllRef}
                                             onDiscardAllRef={allNotesDiscardAllRef}
                                         />
