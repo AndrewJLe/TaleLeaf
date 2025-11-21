@@ -136,7 +136,7 @@ export interface Book {
     updatedAt: Date;
 }
 
-export type TabType = 'characters' | 'chapters' | 'locations' | 'notes';
+export type TabType = 'characters' | 'chapters' | 'locations' | 'notes' | 'all-notes';
 
 export interface AIGenerationState {
     characters: boolean;

@@ -11,6 +11,7 @@ import { useNormalizedChapters, useNormalizedCharacters, useNormalizedLocations,
 import { AIMessage, aiService, TokenEstimate } from "../lib/ai-service";
 import { BookEditorProps, TabType } from "../types/book";
 import ContextWindow from "./ContextWindow";
+import { AllNotesSection } from "./sections/AllNotesSection";
 import { BaseEntityCard } from "./sections/BaseEntityCard";
 import { ChaptersSection } from "./sections/ChaptersSection";
 import { CharactersSection } from "./sections/CharactersSection";
@@ -54,6 +55,10 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     const [tab, setTab] = useState<TabType>('characters');
     const [currentDocumentPage, setCurrentDocumentPage] = useState(1);
     const [newNoteName, setNewNoteName] = useState('');
+    // All Notes tab state
+    const [allNotesUnsaved, setAllNotesUnsaved] = useState({ hasChanges: false, count: 0 });
+    const allNotesSaveAllRef = useRef<(() => Promise<void>) | null>(null);
+    const allNotesDiscardAllRef = useRef<(() => void) | null>(null);
 
     // Unsaved state tracking
     // With normalized immediate persistence, treat unsaved as always clean (legacy draft system retained only for notes V1)
@@ -287,6 +292,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         if (t === 'chapters' && chaptersSaveAllRef.current) return chaptersSaveAllRef.current();
         if (t === 'locations' && locationsSaveAllRef.current) return locationsSaveAllRef.current();
         if (t === 'notes') return handleSaveAllNotes();
+        if (t === 'all-notes' && allNotesSaveAllRef.current) return allNotesSaveAllRef.current();
     }, [handleSaveAllNotes]);
 
     const handleTabDiscardChanges = useCallback((t: TabType) => {
@@ -294,6 +300,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         if (t === 'chapters') chaptersDiscardAllRef.current?.();
         if (t === 'locations') locationsDiscardAllRef.current?.();
         if (t === 'notes') handleDiscardAllNotes();
+        if (t === 'all-notes') allNotesDiscardAllRef.current?.();
     }, [handleDiscardAllNotes]);
 
     // Undo toast integration for soft-deleted entities
@@ -386,7 +393,8 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                         characters: charactersUnsaved,
                                         chapters: chaptersUnsaved,
                                         locations: locationsUnsaved,
-                                        notes: { hasChanges: dirtyNotesCount > 0, count: dirtyNotesCount }
+                                        notes: { hasChanges: dirtyNotesCount > 0, count: dirtyNotesCount },
+                                        'all-notes': allNotesUnsaved
                                     }}
                                     onSaveChanges={handleTabSaveChanges}
                                     onDiscardChanges={handleTabDiscardChanges}
@@ -674,6 +682,22 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                 )}
                                             </div>
                                         </div>
+                                    )}
+                                    {tab === 'all-notes' && (
+                                        <AllNotesSection
+                                            headerSaving={isPersisting}
+                                            lastSaved={lastSaved}
+                                            saveError={persistError}
+                                            characters={normalizedCharacters as any}
+                                            chapters={normalizedChapters as any}
+                                            locations={normalizedLocations as any}
+                                            notes={normalizedNotes as any}
+                                            tagColorMap={tagColorMap}
+                                            onPersistTagColor={upsertTag}
+                                            onUnsavedChangesUpdate={(has, count) => setAllNotesUnsaved({ hasChanges: has, count })}
+                                            onSaveAllRef={allNotesSaveAllRef}
+                                            onDiscardAllRef={allNotesDiscardAllRef}
+                                        />
                                     )}
                                 </div>
                             </div>

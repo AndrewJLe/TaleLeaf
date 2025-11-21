@@ -55,6 +55,9 @@ interface BaseEntityCardProps<T extends BaseEntity> {
   // Tag color persistence
   tagColorMap?: Record<string, string>; // lowercased tag -> color
   onPersistTagColor?: (tag: string, color: string) => Promise<void> | void;
+
+  // Optional: highlight matching tags (case-insensitive substring match)
+  highlightTokens?: string[];
 }
 
 const isValidTag = isValidSimpleTag;
@@ -81,6 +84,7 @@ export function BaseEntityCard<T extends BaseEntity>({
   onFinishNameEdit
   , tagColorMap = {}
   , onPersistTagColor
+  , highlightTokens = []
 }: BaseEntityCardProps<T>) {
   // Local tag management state
   const [newTagDraft, setNewTagDraft] = useState('');
@@ -262,11 +266,18 @@ export function BaseEntityCard<T extends BaseEntity>({
               {(entity.tags || []).map(tag => {
                 const lc = tag.toLowerCase();
                 const baseColor = tagColorOverrides[lc] || tagColorMap[lc] || colorForTagName(tag, { ...tagColorMap, ...tagColorOverrides });
+                const tokens = (highlightTokens || []).map(t => (t || '').toLowerCase()).filter(Boolean);
+                const isHighlighted = tokens.length > 0 && tokens.some(tok => lc.includes(tok));
                 return (
                   <div
                     key={tag}
                     className="inline-flex items-center rounded-full px-2 py-0.5 text-xs sm:text-sm font-medium transform transition-transform hover:scale-105 hover:[&>button]:opacity-100"
-                    style={{ backgroundColor: hexToRgba(baseColor, 0.6), color: readableTextColor(baseColor) }}
+                    style={{
+                      backgroundColor: hexToRgba(baseColor, 0.6),
+                      color: readableTextColor(baseColor),
+                      boxShadow: isHighlighted ? `0 0 0 2px ${baseColor}, 0 0 6px 2px ${hexToRgba(baseColor, 0.35)}` : undefined,
+                      filter: isHighlighted ? 'brightness(1.08)' : undefined
+                    }}
                   >
                     <span className="truncate max-w-[10rem]">{tag}</span>
                     <button

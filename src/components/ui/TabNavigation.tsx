@@ -12,6 +12,7 @@ interface TabNavigationProps {
         chapters?: { hasChanges: boolean; count: number };
         locations?: { hasChanges: boolean; count: number };
         notes?: { hasChanges: boolean; count: number };
+        'all-notes'?: { hasChanges: boolean; count: number };
     };
     // Save/discard functions per tab
     onSaveChanges?: (tab: TabType) => Promise<void>;
@@ -22,7 +23,8 @@ const tabs = [
     { id: 'characters' as TabType, label: 'Characters', icon: UsersIcon },
     { id: 'chapters' as TabType, label: 'Chapters', icon: BookOpenIcon },
     { id: 'locations' as TabType, label: 'Locations', icon: MapPinIcon },
-    { id: 'notes' as TabType, label: 'Notes', icon: NotebookIcon }
+    { id: 'notes' as TabType, label: 'Notes', icon: NotebookIcon },
+    { id: 'all-notes' as TabType, label: 'All Notes', icon: NotebookIcon }
 ];
 
 export const TabNavigation: React.FC<TabNavigationProps> = ({

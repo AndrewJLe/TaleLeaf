@@ -1,166 +1,216 @@
 {
-    "version": "2.0.0",
-    "options": {
-        "shell": {
-            "executable": "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
-            "args": [
-                "-Command"
-            ]
-        }
-    },
-    "tasks": [
-        {
-            "label": "Dev Server",
-            "type": "shell",
-            "command": "npm",
-            "args": [
-                "run",
-                "dev"
-            ],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "new"
-            },
-            "isBackground": true,
-            "problemMatcher": {
-                "owner": "typescript",
-                "source": "ts",
-                "applyTo": "closedDocuments",
-                "fileLocation": [
-                    "relative",
-                    "${workspaceRoot}"
-                ],
-                "pattern": "$tsc",
-                "background": {
-                    "activeOnStart": true,
-                    "beginsPattern": {
-                        "regexp": "(.*?)"
-                    },
-                    "endsPattern": {
-                        "regexp": "compiled|Failed to compile|ready"
-                    }
-                }
-            }
-        },
-        {
-            "label": "Build",
-            "type": "shell",
-            "command": "npm",
-            "args": [
-                "run",
-                "build"
-            ],
-            "group": "build",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "new"
-            },
-            "problemMatcher": [
-                "$tsc"
-            ]
-        },
-        {
-            "label": "Type Check",
-            "type": "shell",
-            "command": "npx",
-            "args": [
-                "tsc",
-                "--noEmit"
-            ],
-            "group": "test",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "new"
-            },
-            "problemMatcher": [
-                "$tsc"
-            ]
-        },
-        {
-            "label": "Lint",
-            "type": "shell",
-            "command": "npm",
-            "args": [
-                "run",
-                "lint"
-            ],
-            "group": "test",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "new"
-            }
-        },
-        {
-            "label": "Format",
-            "type": "shell",
-            "command": "npm",
-            "args": [
-                "run",
-                "format"
-            ],
-            "group": "build",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "new"
-            }
-        },
-        {
-            "label": "Clean Install",
-            "type": "shell",
-            "command": "rm",
-            "args": [
-                "-rf",
-                "node_modules",
-                "package-lock.json"
-            ],
-            "windows": {
-                "command": "Remove-Item",
-                "args": [
-                    "-Recurse",
-                    "-Force",
-                    "node_modules",
-                    "package-lock.json",
-                    "-ErrorAction",
-                    "SilentlyContinue"
-                ]
-            },
-            "group": "build",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "new"
-            }
-        },
-        {
-            "label": "Install Dependencies",
-            "type": "shell",
-            "command": "npm",
-            "args": [
-                "install"
-            ],
-            "group": "build",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "new"
-            },
-            "dependsOn": "Clean Install"
-        }
-    ]
+	"version": "2.0.0",
+	"options": {
+		"shell": {
+			"executable": "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+			"args": [
+				"-Command"
+			]
+		}
+	},
+	"tasks": [
+		{
+			"label": "Dev Server",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"dev"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "new"
+			},
+			"isBackground": true,
+			"problemMatcher": {
+				"owner": "typescript",
+				"source": "ts",
+				"applyTo": "closedDocuments",
+				"fileLocation": [
+					"relative",
+					"${workspaceRoot}"
+				],
+				"pattern": "$tsc",
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": {
+						"regexp": "(.*?)"
+					},
+					"endsPattern": {
+						"regexp": "compiled|Failed to compile|ready"
+					}
+				}
+			}
+		},
+		{
+			"label": "Build",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"build"
+			],
+			"group": "build",
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "new"
+			},
+			"problemMatcher": [
+				"$tsc"
+			]
+		},
+		{
+			"label": "Type Check",
+			"type": "shell",
+			"command": "npx",
+			"args": [
+				"tsc",
+				"--noEmit"
+			],
+			"group": "test",
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "new"
+			},
+			"problemMatcher": [
+				"$tsc"
+			]
+		},
+		{
+			"label": "Lint",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"lint"
+			],
+			"group": "test",
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "new"
+			}
+		},
+		{
+			"label": "Format",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"format"
+			],
+			"group": "build",
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "new"
+			}
+		},
+		{
+			"label": "Clean Install",
+			"type": "shell",
+			"command": "rm",
+			"args": [
+				"-rf",
+				"node_modules",
+				"package-lock.json"
+			],
+			"windows": {
+				"command": "Remove-Item",
+				"args": [
+					"-Recurse",
+					"-Force",
+					"node_modules",
+					"package-lock.json",
+					"-ErrorAction",
+					"SilentlyContinue"
+				]
+			},
+			"group": "build",
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "new"
+			}
+		},
+		{
+			"label": "Install Dependencies",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"install"
+			],
+			"group": "build",
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "new"
+			},
+			"dependsOn": "Clean Install"
+		},
+		{
+			"label": "Type Check",
+			"type": "shell",
+			"command": "npx",
+			"args": [
+				"tsc",
+				"--noEmit"
+			],
+			"group": "test"
+		},
+		{
+			"label": "Type Check",
+			"type": "shell",
+			"command": "npx",
+			"args": [
+				"tsc",
+				"--noEmit"
+			],
+			"group": "test"
+		},
+		{
+			"label": "Lint",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"lint"
+			],
+			"group": "test"
+		},
+		{
+			"label": "Type Check",
+			"type": "shell",
+			"command": "npx",
+			"args": [
+				"tsc",
+				"--noEmit"
+			],
+			"group": "test"
+		},
+		{
+			"label": "Type Check",
+			"type": "shell",
+			"command": "npx",
+			"args": [
+				"tsc",
+				"--noEmit"
+			],
+			"group": "test"
+		}
+	]
 }
