@@ -8,9 +8,11 @@ import { useBookActions } from "../hooks/useBookActions";
 import { useBookPersistence } from "../hooks/useBookPersistenceNew";
 import { useBookTagGroups } from "../hooks/useBookTagGroups";
 import { useNormalizedChapters, useNormalizedCharacters, useNormalizedLocations, useNormalizedNotes } from "../hooks/useNormalizedEntities";
-import { AIMessage, aiService, TokenEstimate } from "../lib/ai-service";
+import { AIMessage, aiService } from "../lib/ai-service";
+import { supabaseClient } from "../lib/supabase-client";
 import { BookEditorProps, TabType } from "../types/book";
 import ContextWindow from "./ContextWindow";
+import { FeatureFlagDebug } from "./FeatureFlagDebug";
 import { AllNotesSection } from "./sections/AllNotesSection";
 import { BaseEntityCard } from "./sections/BaseEntityCard";
 import { ChaptersSection } from "./sections/ChaptersSection";
@@ -25,7 +27,6 @@ import { SaveStatus } from "./ui/SaveStatus";
 import { SplitLayout } from "./ui/SplitLayout";
 import { TabNavigation } from "./ui/TabNavigation";
 import { Toast, useToast } from "./ui/Toast";
-import { TokenConfirmDialog } from "./ui/TokenConfirmDialog";
 import { Tooltip } from "./ui/Tooltip";
 
 export default function BookEditor({ book, onUpdate }: BookEditorProps) {
@@ -50,7 +51,6 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     const [showSettings, setShowSettings] = useState(false);
     const searchParams = useSearchParams();
     useEffect(() => { if (searchParams?.get('edit') === '1') setShowSettings(true); }, [searchParams]);
-    const [showContextWindow, setShowContextWindow] = useState(false);
     const [showRateLimits, setShowRateLimits] = useState(false);
     const [tab, setTab] = useState<TabType>('characters');
     const [currentDocumentPage, setCurrentDocumentPage] = useState(1);
@@ -78,6 +78,13 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     const notesDiscardAllRef = useRef<(() => void) | null>(null);
 
     const { aiGenerationState, isAILoading, setIsAILoading, setGenerationLoading } = useAIGeneration();
+    const contextWindowV2Enabled = !!supabaseClient;
+    const [contextPrepStatus, setContextPrepStatus] = useState<'idle' | 'indexing' | 'ready' | 'error'>('idle');
+    const [contextProgress, setContextProgress] = useState<{ processed: number; total: number } | null>(null);
+    const [hasReadinessChecked, setHasReadinessChecked] = useState(!contextWindowV2Enabled);
+    const isCheckingReadiness = contextWindowV2Enabled && !hasReadinessChecked;
+    const isGateVisible = contextWindowV2Enabled && hasReadinessChecked && contextPrepStatus !== 'ready';
+    const showChatContent = !contextWindowV2Enabled || (hasReadinessChecked && contextPrepStatus === 'ready');
 
     // Normalized entities
     const normalizedCharacters = useNormalizedCharacters(local.id, true);
@@ -100,23 +107,168 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     const handleContextWindowChange = (start: number, end: number) => { updateBook({ window: { start, end } }); };
     useEffect(() => { if (local.window && typeof local.window.start === 'number') setCurrentDocumentPage(local.window.start); }, [local.window?.start]);
 
-    const handleSendMessage = async () => {
-        if (!message.trim() || isAILoading) return;
-        const userMessage: AIMessage = { role: 'user', content: message.trim() };
-        const newChat = [...chat, userMessage];
-        setChat(newChat); setMessage(''); setIsAILoading(true);
-        try { const contextText = aiService.extractContextText(local, local.window.start, local.window.end); const response = await aiService.chat(newChat, contextText); setChat([...newChat, { role: 'assistant', content: response }]); } catch { setChat([...newChat, { role: 'assistant', content: 'Sorry, I encountered an error. Please check your AI settings and try again.' }]); } finally { setIsAILoading(false); }
-    };
-
-    const confirmAIAction = (action: string, promptText: string, onConfirm: () => Promise<void>): Promise<void> => new Promise(resolve => {
-        const contextText = aiService.extractContextTextChunked(local, local.window.start, local.window.end, 8000);
-        const estimate = aiService.estimateRequestCost(contextText, promptText);
-        if (estimate.estimatedCost < 0.01) { onConfirm().then(resolve); return; }
-        setTokenConfirm({ isOpen: true, estimate, action, onConfirm: async () => { await onConfirm(); resolve(); } });
-    });
-
     const currentUpload = local.uploads?.[0];
     const currentPageText = currentUpload?.pages ? (currentUpload.pages[currentDocumentPage - 1] || '') : '';
+
+    const fetchContextWindowPayload = useCallback(async (question: string) => {
+        if (!contextWindowV2Enabled || !supabaseClient) return null;
+        try {
+            const session = await supabaseClient.auth.getSession();
+            const token = session.data.session?.access_token;
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const response = await fetch(`/api/books/${local.id}/context-window`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    question,
+                    window: { type: 'pages', start: local.window.start, end: local.window.end },
+                    maxContextTokens: 1800
+                })
+            });
+
+            if (response.status === 202) {
+                setContextPrepStatus('indexing');
+                return null; // data still processing, fallback to legacy context
+            }
+
+            if (!response.ok) {
+                console.warn('Context window request failed', await response.json().catch(() => null));
+                setContextPrepStatus('error');
+                return null;
+            }
+
+            const payload = await response.json();
+            if (!payload?.ready || !payload.result?.systemPrompt) return null;
+            setContextPrepStatus('ready');
+            return payload;
+        } catch (error) {
+            console.warn('Context window fetch error', error);
+            return null;
+        }
+    }, [contextWindowV2Enabled, local.id, local.window.start, local.window.end]);
+
+    const triggerContextPreprocess = useCallback(async () => {
+        if (!contextWindowV2Enabled || !supabaseClient) return;
+        try {
+            setContextPrepStatus('indexing');
+            const session = await supabaseClient.auth.getSession();
+            const token = session.data.session?.access_token;
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const response = await fetch(`/api/books/${local.id}/context-preprocess`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ pages: currentUpload?.pages })
+            });
+
+            if (!response.ok) {
+                console.warn('Context preprocess request failed', await response.json().catch(() => null));
+                setContextPrepStatus('error');
+                setContextProgress(null);
+                setHasReadinessChecked(true);
+                return;
+            }
+
+            const result = await response.json();
+            if (result.status === 'done') {
+                setContextPrepStatus('ready');
+                if (typeof result.processedPages === 'number' && typeof result.totalPages === 'number') {
+                    setContextProgress({ processed: result.processedPages, total: result.totalPages });
+                } else {
+                    setContextProgress(null);
+                }
+                setHasReadinessChecked(true);
+            } else {
+                setContextPrepStatus('error');
+                setContextProgress(null);
+                setHasReadinessChecked(true);
+            }
+        } catch (error) {
+            console.warn('Context preprocess error', error);
+            setContextPrepStatus('error');
+            setContextProgress(null);
+            setHasReadinessChecked(true);
+        }
+    }, [contextWindowV2Enabled, local.id, currentUpload?.pages]);
+
+    useEffect(() => {
+        if (!contextWindowV2Enabled || !supabaseClient) {
+            setHasReadinessChecked(true);
+            return;
+        }
+
+        let cancelled = false;
+        setHasReadinessChecked(false);
+
+        (async () => {
+            try {
+                const { count, error } = await supabaseClient
+                    .from('book_page_chunks')
+                    .select('id', { head: true, count: 'exact' })
+                    .eq('book_id', local.id);
+
+                if (cancelled) return;
+
+                if (error) {
+                    console.warn('Readiness check failed', error);
+                    setContextPrepStatus('idle');
+                    return;
+                }
+
+                if (typeof count === 'number' && count > 0) {
+                    setContextPrepStatus('ready');
+                } else {
+                    setContextPrepStatus('idle');
+                }
+            } catch (err) {
+                console.warn('Readiness check error', err);
+                if (!cancelled) {
+                    setContextPrepStatus('idle');
+                }
+            } finally {
+                if (!cancelled) {
+                    setHasReadinessChecked(true);
+                }
+            }
+        })();
+
+        return () => { cancelled = true; };
+    }, [contextWindowV2Enabled, supabaseClient, local.id]);
+
+    const handleSendMessage = async () => {
+        if (!message.trim() || isAILoading) return;
+        const trimmed = message.trim();
+        const userMessage: AIMessage = { role: 'user', content: trimmed };
+        const newChat = [...chat, userMessage];
+        setChat(newChat); setMessage(''); setIsAILoading(true);
+        try {
+            let systemPromptOverride: string | undefined;
+            let contextText = '';
+            if (contextWindowV2Enabled) {
+                const payload = await fetchContextWindowPayload(trimmed);
+                if (payload?.result?.systemPrompt) {
+                    systemPromptOverride = payload.result.systemPrompt;
+                } else {
+                    contextText = aiService.extractContextText(local, local.window.start, local.window.end);
+                }
+            } else {
+                contextText = aiService.extractContextText(local, local.window.start, local.window.end);
+            }
+
+            const response = await aiService.chat(newChat, contextText, { systemPromptOverride });
+            setChat([...newChat, { role: 'assistant', content: response }]);
+        } catch (error) {
+            console.error('AI chat error', error);
+            setChat([...newChat, { role: 'assistant', content: 'Sorry, I encountered an error. Please check your AI settings and try again.' }]);
+        } finally {
+            setIsAILoading(false);
+        }
+    };
+
+
     const saveCurrentPageText = (value: string) => { if (!currentUpload?.pages) return; const updatedUpload = { ...currentUpload, pages: [...currentUpload.pages] }; updatedUpload.pages[currentDocumentPage - 1] = value; updateBook({ uploads: [updatedUpload] }); };
 
     const handleCharactersUnsavedUpdate = useCallback((has: boolean, count: number) => setCharactersUnsaved({ hasChanges: has, count }), []);
@@ -124,7 +276,6 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     const handleLocationsUnsavedUpdate = useCallback((has: boolean, count: number) => setLocationsUnsaved({ hasChanges: has, count }), []);
     const handleAllNotesUnsavedUpdate = useCallback((has: boolean, count: number) => setAllNotesUnsaved({ hasChanges: has, count }), []);
 
-    const [tokenConfirm, setTokenConfirm] = useState<{ isOpen: boolean; estimate: TokenEstimate | null; action: string; onConfirm: () => void | Promise<void>; }>({ isOpen: false, estimate: null, action: '', onConfirm: () => { } });
     const [isEditingTitle, setIsEditingTitle] = useState(false);
 
     // Note editing state (similar to CharactersSection)
@@ -344,7 +495,6 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                         </div>
                         {local.cover && <img src={local.cover} alt="Cover" className="h-16 w-12 object-cover rounded shadow border" />}
                         <div className="flex items-center gap-2">
-                            <Tooltip text="Chat with AI" id="chat-toggle"><Button onClick={() => setShowContextWindow(!showContextWindow)} variant="secondary" size="sm" className="p-2"><MessageSquareIcon size={20} /></Button></Tooltip>
                             <Tooltip text="Settings" id="settings-button"><Button onClick={() => setShowSettings(true)} variant="secondary" size="sm" className="p-2"><SettingsIcon size={20} /></Button></Tooltip>
                             {isPersisting && <div className="text-xs text-gray-500 flex items-center gap-1"><div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>Saving...</div>}
                             {lastSaved && !isPersisting && <div className="text-xs text-gray-400">Saved {lastSaved.toLocaleTimeString()}</div>}
@@ -356,35 +506,102 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                 <SplitLayout
                     leftPanel={
                         <div className="space-y-6">
-                            {showContextWindow && (
-                                <div className="rounded-xl border border-amber-200 p-6 bg-amber-50 shadow-lg">
-                                    <div className="flex items-center gap-3 mb-6">
-                                        <div className="p-2 bg-amber-100 rounded-lg"><MessageSquareIcon size={20} className="text-amber-700" /></div>
-                                        <h3 className="text-lg font-semibold text-amber-900">AI Chat & Context</h3>
-                                    </div>
-                                    <ContextWindow window={local.window} pageCount={pageCount} book={local} onChange={handleContextWindowChange} />
-                                    <div className="mt-6 space-y-4 mb-4 max-h-64 overflow-y-auto">
-                                        {chat.length === 0 && (
-                                            <div className="text-center py-6 text-amber-700">
-                                                <div className="text-3xl mb-3">🤖</div>
-                                                <p className="font-medium">Ask me anything about your book!</p>
-                                                <p className="text-sm opacity-75">I can only see pages {local.window.start}-{local.window.end}</p>
+                            <div className="rounded-xl border border-gray-200 p-6 bg-white shadow-lg">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="p-2 bg-emerald-50 rounded-lg"><MessageSquareIcon size={20} className="text-emerald-700" /></div>
+                                    <h3 className="text-lg font-semibold text-gray-900">AI Chat & Context</h3>
+                                </div>
+                                {contextWindowV2Enabled ? (
+                                    <div className="mt-4 text-xs flex flex-col gap-3 rounded-lg bg-slate-50 border border-slate-200 px-4 py-4">
+                                        {isCheckingReadiness && (
+                                            <div className="flex items-center gap-2 text-slate-600">
+                                                <span className="h-2 w-2 rounded-full bg-slate-500 animate-pulse" />
+                                                <span>Checking whether TaleLeaf has already read this book…</span>
                                             </div>
                                         )}
-                                        {chat.map((msg, i) => (
-                                            <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                                <div className={`max-w-sm p-3 rounded-lg ${msg.role === 'user' ? 'bg-emerald-700 text-white' : 'bg-white border border-amber-200'}`}>
-                                                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                        {isGateVisible && (
+                                            <>
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <p className="font-medium text-slate-800">Let TaleLeaf read this book first.</p>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="primary"
+                                                        className="text-xs px-3"
+                                                        disabled={contextPrepStatus === 'indexing'}
+                                                        onClick={() => {
+                                                            setContextProgress(null);
+                                                            void triggerContextPreprocess();
+                                                        }}
+                                                    >
+                                                        {contextPrepStatus === 'indexing' ? 'Reading…' : 'Read this book'}
+                                                    </Button>
                                                 </div>
+                                                {contextPrepStatus === 'indexing' && (
+                                                    <div className="flex flex-col gap-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />
+                                                            <span className="text-[11px] text-slate-600">TaleLeaf is reading your selected pages so answers stay in-window.</span>
+                                                        </div>
+                                                        <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden shadow-inner">
+                                                            <div
+                                                                className="h-full bg-emerald-500 transition-all duration-500"
+                                                                style={{ width: contextProgress && contextProgress.total > 0 ? `${Math.min(100, Math.max(0, (contextProgress.processed / contextProgress.total) * 100))}%` : '20%' }}
+                                                            />
+                                                        </div>
+                                                        {contextProgress && contextProgress.total > 0 && (
+                                                            <p className="text-[11px] text-slate-500">{contextProgress.processed}/{contextProgress.total} batches processed.</p>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                {contextPrepStatus === 'idle' && (
+                                                    <p className="text-[11px] text-slate-600">Once TaleLeaf reads this range, answers will stay within your selected pages.</p>
+                                                )}
+                                                {contextPrepStatus === 'error' && (
+                                                    <p className="text-[11px] text-rose-700">There was a problem reading the book. Try again in a moment.</p>
+                                                )}
+                                            </>
+                                        )}
+                                        {!isCheckingReadiness && contextPrepStatus === 'ready' && (
+                                            <div className="flex items-center gap-2 text-emerald-700">
+                                                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-[10px] text-white">✓</span>
+                                                <span>TaleLeaf has finished reading this book and is ready for questions.</span>
                                             </div>
-                                        ))}
+                                        )}
                                     </div>
-                                    <div className="flex gap-3">
-                                        <input type="text" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Ask about characters, plot, themes..." className="flex-1 px-4 py-3 border border-amber-200 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent" onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()} disabled={isAILoading} />
-                                        <Button onClick={handleSendMessage} disabled={!message.trim() || isAILoading} isLoading={isAILoading} variant="primary" className="bg-emerald-700 hover:bg-emerald-800">Send</Button>
+                                ) : (
+                                    <div className="mt-4 text-xs text-slate-600 bg-slate-50 border border-slate-200 px-3 py-2 rounded-lg">
+                                        Connect Supabase to enable richer retrieval. We will still use your selected pages locally.
                                     </div>
-                                </div>
-                            )}
+                                )}
+                                {showChatContent && (
+                                    <>
+                                        <div className="mt-4">
+                                            <ContextWindow window={local.window} pageCount={pageCount} onChange={handleContextWindowChange} />
+                                        </div>
+                                        <div className="mt-6 space-y-4 mb-4 max-h-64 overflow-y-auto bg-white/60 rounded-lg">
+                                            {chat.length === 0 && (
+                                                <div className="text-center py-6 text-slate-600">
+                                                    <div className="text-3xl mb-3">🤖</div>
+                                                    <p className="text-sm font-medium">Ask me anything about your book.</p>
+                                                    <p className="text-xs text-slate-500 mt-1">I can only see pages {local.window.start}-{local.window.end}</p>
+                                                </div>
+                                            )}
+                                            {chat.map((msg, i) => (
+                                                <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                                    <div className={`max-w-sm p-3 rounded-2xl shadow-sm ${msg.role === 'user' ? 'bg-emerald-700 text-white' : 'bg-white border border-slate-200'}`}>
+                                                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="flex gap-3 mt-2">
+                                            <input type="text" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Ask about characters, plot, themes..." className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-400 focus:border-transparent bg-white" onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()} disabled={isAILoading} />
+                                            <Button onClick={handleSendMessage} disabled={!message.trim() || isAILoading} isLoading={isAILoading} variant="primary" className="bg-emerald-700 hover:bg-emerald-800">Send</Button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+
 
                             <div className="rounded-xl border border-gray-200 p-6 bg-white shadow-lg">
                                 <TabNavigation
@@ -419,7 +636,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                 [reorderedIds[sortedIndex], reorderedIds[swapIndex]] = [reorderedIds[swapIndex], reorderedIds[sortedIndex]];
                                                 await normalizedCharacters.reorder(reorderedIds.map(item => item.id));
                                             }}
-                                            onGenerateCharacters={() => confirmAIAction('generate characters', 'Analyze the provided text and identified all characters mentioned', generateCharacters)}
+                                            onGenerateCharacters={() => generateCharacters()}
                                             onUnsavedChangesUpdate={handleCharactersUnsavedUpdate}
                                             onSaveAllRef={charactersSaveAllRef}
                                             onDiscardAllRef={charactersDiscardAllRef}
@@ -448,7 +665,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                 [reorderedIds[sortedIndex], reorderedIds[swapIndex]] = [reorderedIds[swapIndex], reorderedIds[sortedIndex]];
                                                 await normalizedChapters.reorder(reorderedIds.map(item => item.id));
                                             }}
-                                            onGenerateSummary={(chapterIndex) => confirmAIAction('generate chapter summary', 'Create a concise chapter summary for the provided text', () => generateChapterSummary(chapterIndex))}
+                                            onGenerateSummary={(chapterIndex) => generateChapterSummary(chapterIndex)}
                                             onBatchUpdateChapters={async (chapters) => { await Promise.all(chapters.map(ch => normalizedChapters.update((ch as any).id, ch as any))); }}
                                             onUnsavedChangesUpdate={handleChaptersUnsavedUpdate}
                                             onSaveAllRef={chaptersSaveAllRef}
@@ -478,7 +695,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                 [reorderedIds[sortedIndex], reorderedIds[swapIndex]] = [reorderedIds[swapIndex], reorderedIds[sortedIndex]];
                                                 await normalizedLocations.reorder(reorderedIds.map(item => item.id));
                                             }}
-                                            onGenerateLocations={() => confirmAIAction('generate locations', 'Analyze the provided text and identify all locations, places, and settings mentioned', generateLocations)}
+                                            onGenerateLocations={() => generateLocations()}
                                             onBatchUpdateLocations={async (locs) => { await Promise.all(locs.map(l => normalizedLocations.update(l.id, l as any))); }}
                                             onUnsavedChangesUpdate={handleLocationsUnsavedUpdate}
                                             onSaveAllRef={locationsSaveAllRef}
@@ -532,7 +749,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                             id="notes-ai-generate"
                                                         >
                                                             <Button
-                                                                onClick={() => confirmAIAction('generate notes', 'Analyze the provided text and create relevant notes', () => generateNotes())}
+                                                                onClick={() => generateNotes()}
                                                                 isLoading={aiGenerationState.notes}
                                                                 variant="primary"
                                                                 className="w-full sm:w-auto"
@@ -754,13 +971,6 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
             />
 
             <RateLimitsModal isOpen={showRateLimits} onClose={() => setShowRateLimits(false)} />
-            <TokenConfirmDialog
-                isOpen={tokenConfirm.isOpen}
-                onConfirm={() => { setTokenConfirm({ ...tokenConfirm, isOpen: false }); tokenConfirm.onConfirm(); }}
-                onCancel={() => setTokenConfirm({ ...tokenConfirm, isOpen: false })}
-                estimate={tokenConfirm.estimate!}
-                action={tokenConfirm.action}
-            />
             <Toast
                 message={toast.message}
                 isVisible={toast.isVisible}
@@ -770,7 +980,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                 actionLabel={toast.actionLabel}
                 onAction={toast.onAction}
             />
-            {/* FeatureFlagDebug removed */}
+            <FeatureFlagDebug />
         </div>
     );
 }

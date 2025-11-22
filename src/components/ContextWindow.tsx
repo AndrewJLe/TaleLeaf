@@ -1,36 +1,31 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { aiService } from "../lib/ai-service";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-export default function ContextWindow({
-    window: win,
-    pageCount,
-    book,
-    onChange,
-}: {
+interface ChapterMarker {
+    id: string;
+    title: string;
+    startPage: number;
+    endPage?: number;
+    index: number;
+}
+
+interface ContextWindowProps {
     window: { start: number; end: number };
     pageCount: number;
-    book?: any;
+    chapters?: ChapterMarker[];
     onChange: (start: number, end: number) => void;
-}) {
+}
+
+export default function ContextWindow({ window: win, pageCount, chapters = [], onChange }: ContextWindowProps) {
     const [active, setActive] = useState<'start' | 'end' | null>(null);
-    const [tokenCount, setTokenCount] = useState(0);
-    const [isChunked, setIsChunked] = useState(false);
+    const [startInput, setStartInput] = useState(String(win.start));
+    const [endInput, setEndInput] = useState(String(win.end));
 
     const trackRef = useRef<HTMLDivElement | null>(null);
 
-    useEffect(() => {
-        if (book) {
-            // Check if content needs chunking
-            const fullTokens = aiService.estimateContextTokens(book, win.start, win.end);
-            const chunkedText = aiService.extractContextTextChunked(book, win.start, win.end, 8000);
-            const chunkedTokens = aiService.estimateTokens(chunkedText);
-
-            setTokenCount(chunkedTokens);
-            setIsChunked(fullTokens > chunkedTokens);
-        }
-    }, [book, win.start, win.end]);
+    useEffect(() => { setStartInput(String(win.start)); }, [win.start]);
+    useEffect(() => { setEndInput(String(win.end)); }, [win.end]);
 
     useEffect(() => {
         const onUp = () => setActive(null);
@@ -59,18 +54,50 @@ export default function ContextWindow({
     const leftZ = active === 'start' ? 30 : active === 'end' ? 10 : (win.start >= win.end ? 30 : 20);
     const rightZ = active === 'end' ? 30 : active === 'start' ? 10 : (win.end > win.start ? 30 : 20);
 
+    const chapterButtons = useMemo(() => chapters.filter(ch => ch.startPage >= 1 && ch.startPage <= pageCount), [chapters, pageCount]);
+
+    const percentageForPage = (page: number) => {
+        if (pageCount <= 1) return 0;
+        return ((page - 1) / (pageCount - 1)) * 100;
+    };
+
+    const clampStart = (value: number) => Math.max(1, Math.min(value, pageCount));
+    const clampEnd = (value: number, baseStart: number = win.start) => Math.min(pageCount, Math.max(value, baseStart));
+
+    const handleStartBlur = () => {
+        let next = parseInt(startInput, 10);
+        if (Number.isNaN(next)) next = win.start;
+        next = clampStart(next);
+        setStartInput(String(next));
+        if (next !== win.start) onChange(next, Math.max(next, win.end));
+    };
+
+    const handleEndBlur = () => {
+        let next = parseInt(endInput, 10);
+        if (Number.isNaN(next)) next = win.end;
+        next = clampEnd(next);
+        setEndInput(String(next));
+        if (next !== win.end) onChange(win.start, next);
+    };
+
+    const handleChapterJump = (marker: ChapterMarker) => {
+        const start = clampStart(marker.startPage);
+        const chapterEnd = marker.endPage ? clampEnd(marker.endPage, start) : clampEnd(marker.startPage + (win.end - win.start), start);
+        onChange(start, Math.max(start, chapterEnd));
+    };
+
     return (
-        <section className="mt-4 border-t pt-4">
-            <div className="flex items-center justify-between">
-                <h3 className="font-medium">Context window (pages)</h3>
-                <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                    ~{tokenCount.toLocaleString()} tokens
+        <section className="mt-4">
+            <div className="flex items-center justify-between mb-2">
+                <div>
+                    <h3 className="font-semibold text-gray-900">Context window</h3>
+                    <p className="text-xs text-slate-500">Pages {win.start} – {win.end} of {pageCount}</p>
                 </div>
             </div>
-            <div className="mt-2 text-sm text-slate-500">Page 1 — {pageCount}</div>
 
-            <div className="mt-3">
-                <div ref={trackRef} onPointerDown={(e) => {
+            <div
+                ref={trackRef}
+                onPointerDown={(e) => {
                     // determine which handle is closer to pointer and activate it immediately
                     const rect = trackRef.current?.getBoundingClientRect();
                     if (!rect) return;
@@ -87,66 +114,100 @@ export default function ContextWindow({
                         setActive('end');
                         onChange(win.start, Math.max(val, win.start));
                     }
-                }} className="relative h-8">
-                    {/* background track */}
-                    <div className="absolute left-0 right-0 top-3 h-1 bg-slate-200 rounded" />
+                }}
+                className="relative h-12 select-none"
+            >
+                {/* background track */}
+                <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-2 rounded-full bg-slate-200" />
 
-                    {/* selected range highlight */}
+                {/* chapter markers */}
+                {chapterButtons.map(marker => (
                     <div
-                        className="absolute top-3 h-1 bg-emerald-500 rounded"
-                        style={{ left: `${((win.start - 1) / (pageCount - 1)) * 100}%`, right: `${100 - ((win.end - 1) / (pageCount - 1)) * 100}%` }}
-                    />
+                        key={`${marker.id}-${marker.startPage}`}
+                        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none"
+                        style={{ left: `${percentageForPage(marker.startPage)}%` }}
+                    >
+                        <div className="w-px h-3 bg-slate-400" />
+                        <span className="mt-1 text-[10px] text-slate-500 whitespace-nowrap">{marker.title}</span>
+                    </div>
+                ))}
 
-                    {/* left handle (visual only) */}
+                {/* selected range highlight */}
+                <div
+                    className="absolute top-1/2 -translate-y-1/2 h-2 bg-gradient-to-r from-emerald-400 to-emerald-600 rounded-full shadow-inner"
+                    style={{ left: `${percentageForPage(win.start)}%`, right: `${100 - percentageForPage(win.end)}%` }}
+                />
+
+                {/* left handle (visual only) */}
+                <input
+                    aria-hidden
+                    type="range"
+                    min={1}
+                    max={pageCount}
+                    value={win.start}
+                    readOnly
+                    className="absolute left-0 right-0 top-0 w-full h-12 bg-transparent appearance-none pointer-events-none"
+                    style={{ zIndex: leftZ }}
+                />
+
+                {/* right handle (visual only) */}
+                <input
+                    aria-hidden
+                    type="range"
+                    min={1}
+                    max={pageCount}
+                    value={win.end}
+                    readOnly
+                    className="absolute left-0 right-0 top-0 w-full h-12 bg-transparent appearance-none pointer-events-none"
+                    style={{ zIndex: rightZ }}
+                />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 mt-4 text-sm">
+                <div className="flex items-center gap-2">
+                    <label className="text-xs text-slate-500 uppercase tracking-wide">Start</label>
                     <input
-                        aria-hidden
-                        type="range"
+                        type="number"
                         min={1}
                         max={pageCount}
-                        value={win.start}
-                        readOnly
-                        className="absolute left-0 right-0 top-0 w-full h-8 bg-transparent appearance-none pointer-events-none"
-                        style={{ zIndex: leftZ }}
-                    />
-
-                    {/* right handle (visual only) */}
-                    <input
-                        aria-hidden
-                        type="range"
-                        min={1}
-                        max={pageCount}
-                        value={win.end}
-                        readOnly
-                        className="absolute left-0 right-0 top-0 w-full h-8 bg-transparent appearance-none pointer-events-none"
-                        style={{ zIndex: rightZ }}
+                        value={startInput}
+                        onChange={(e) => setStartInput(e.target.value)}
+                        onBlur={handleStartBlur}
+                        className="w-24 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-300 focus:border-transparent"
                     />
                 </div>
+                <div className="flex items-center gap-2">
+                    <label className="text-xs text-slate-500 uppercase tracking-wide">End</label>
+                    <input
+                        type="number"
+                        min={1}
+                        max={pageCount}
+                        value={endInput}
+                        onChange={(e) => setEndInput(e.target.value)}
+                        onBlur={handleEndBlur}
+                        className="w-24 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-300 focus:border-transparent"
+                    />
+                </div>
+                <div className="text-xs text-slate-500">AI will only use pages inside this range.</div>
+            </div>
 
-                <div className="flex items-center gap-2 mt-3">
-                    <input
-                        type="number"
-                        min={1}
-                        max={pageCount}
-                        value={win.start}
-                        onChange={(e) => onChange(Math.max(1, Math.min(Number(e.target.value) || 1, win.end)), win.end)}
-                        className="w-24 border rounded px-2 py-1"
-                    />
-                    <span className="text-sm text-slate-500">to</span>
-                    <input
-                        type="number"
-                        min={1}
-                        max={pageCount}
-                        value={win.end}
-                        onChange={(e) => onChange(win.start, Math.min(pageCount, Math.max(Number(e.target.value) || pageCount, win.start)))}
-                        className="w-24 border rounded px-2 py-1"
-                    />
-                    <div className="text-xs text-slate-500 ml-4">
-                        AI will only use pages in this window
+            {chapterButtons.length > 0 && (
+                <div className="mt-4">
+                    <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Jump to chapter</p>
+                    <div className="flex flex-wrap gap-2">
+                        {chapterButtons.map(marker => (
+                            <button
+                                key={marker.id}
+                                type="button"
+                                onClick={() => handleChapterJump(marker)}
+                                className="px-3 py-1.5 rounded-full border border-slate-200 bg-white text-xs text-slate-600 hover:border-emerald-400 hover:text-emerald-700 transition-colors"
+                            >
+                                {marker.title}
+                            </button>
+                        ))}
                     </div>
                 </div>
-
-                {/* Rate limit display removed for a cleaner, minimal interface */}
-            </div>
+            )}
         </section>
     );
 }

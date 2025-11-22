@@ -10,7 +10,7 @@ export interface TelemetryEvent {
 
 // In future wire to real provider (e.g., PostHog / Rudder / custom endpoint)
 function dispatch(evt: TelemetryEvent) {
-  if (!featureFlags.telemetryBasic) return;
+  if (!((featureFlags as any).telemetryBasic)) return;
   try {
     // For now just log (could enqueue to /api/telemetry)
     // Keep minimal PII: do not include free-form text bodies.

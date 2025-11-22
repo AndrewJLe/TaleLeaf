@@ -67,6 +67,10 @@ export interface TokenBudget {
     warningThreshold: number; // percentage (0.8 = 80%)
 }
 
+interface ChatOptions {
+    systemPromptOverride?: string;
+}
+
 export interface TokenStats {
     todayUsage: number;    // dollars spent today
     monthUsage: number;    // dollars spent this month
@@ -427,7 +431,7 @@ class AIService {
         return this.settings;
     }
 
-    async chat(messages: AIMessage[], contextText: string): Promise<string> {
+    async chat(messages: AIMessage[], contextText: string, options?: ChatOptions): Promise<string> {
         const provider = AI_PROVIDERS.find(p => p.id === this.settings.provider);
         if (!provider) {
             throw new Error('Invalid AI provider selected');
@@ -441,15 +445,15 @@ class AIService {
         switch (provider.id) {
             case 'openai-gpt4o-mini':
             case 'openai-gpt4o':
-                return this.chatWithOpenAI(messages, contextText, provider.id);
+                return this.chatWithOpenAI(messages, contextText, provider.id, options);
             case 'anthropic-claude':
-                return this.chatWithAnthropic(messages, contextText);
+                return this.chatWithAnthropic(messages, contextText, options);
             default:
                 throw new Error(`Provider ${provider.id} not implemented yet`);
         }
     }
 
-    private async chatWithOpenAI(messages: AIMessage[], contextText: string, model: string): Promise<string> {
+    private async chatWithOpenAI(messages: AIMessage[], contextText: string, model: string, options?: ChatOptions): Promise<string> {
         const apiKey = this.settings.apiKeys['openai-gpt4o-mini'] || this.settings.apiKeys['openai-gpt4o'];
         if (!apiKey) {
             throw new Error('OpenAI API key not configured');
@@ -458,9 +462,10 @@ class AIService {
         const modelName = model === 'openai-gpt4o' ? 'gpt-4o' : 'gpt-4o-mini';
 
         // Estimate tokens for this request
-        const systemPrompt = this.buildSystemPrompt(contextText);
+        const systemPrompt = options?.systemPromptOverride ?? this.buildSystemPrompt(contextText);
 
-        const estimatedInputTokens = this.estimateTokens(systemPrompt + messages.map(m => m.content).join(''));
+        const nonEmptyMessages = messages.filter(m => m.content && m.content.trim().length > 0);
+        const estimatedInputTokens = this.estimateTokens(systemPrompt) + nonEmptyMessages.reduce((sum, m) => sum + this.estimateTokens(m.content), 0);
         const estimatedOutputTokens = 500; // max_tokens setting
         const totalEstimatedTokens = estimatedInputTokens + estimatedOutputTokens;
 
@@ -486,7 +491,7 @@ class AIService {
                 body: JSON.stringify({
                     model: modelName,
                     messages: [systemMessage, ...messages],
-                    max_tokens: 500,
+                    max_tokens: 1000,
                     temperature: 0.7,
                 })
             });
@@ -527,7 +532,7 @@ class AIService {
         }
     }
 
-    private async chatWithAnthropic(messages: AIMessage[], contextText: string): Promise<string> {
+    private async chatWithAnthropic(messages: AIMessage[], contextText: string, options?: ChatOptions): Promise<string> {
         const apiKey = this.settings.apiKeys['anthropic-claude'];
         if (!apiKey) {
             throw new Error('Anthropic API key not configured');
@@ -535,7 +540,7 @@ class AIService {
 
         try {
             // Convert messages to Anthropic format
-            const systemPrompt = this.buildSystemPrompt(contextText);
+            const systemPrompt = options?.systemPromptOverride ?? this.buildSystemPrompt(contextText);
 
             const userMessages = messages.filter(m => m.role === 'user');
             const lastUserMessage = userMessages[userMessages.length - 1]?.content || '';
