@@ -1,4 +1,5 @@
 # TaleLeaf
+<<<<<<< HEAD
 
 TaleLeaf helps readers turn raw narrative into structured understanding (characters, locations, timelines, and notes) with spoiler-aware AI assistance.
 
@@ -69,45 +70,217 @@ Feature flags
 
 Developer guidance & conventions
 
-- Follow patterns in `AGENTS.md` and `copilot-instructions.md`.
-- Use hooks in `src/hooks` instead of duplicating logic.
-- Keep UI components purely presentational and move logic into hooks or `src/lib` helpers.
-- Run type checks and lint before committing.
+# TaleLeaf
 
-Key files & locations
+TaleLeaf is a spoiler-safe reading companion that helps you turn raw narrative into structured understanding. It sits alongside your books and lets you capture characters, locations, chapters, and notes while using AI that stays strictly inside your current reading window.
 
+Think of it as a focused **reading workbench** for people who annotate, analyze, or study long-form fiction and narrative non-fiction.
+
+---
+
+## Table of Contents
+
+- [What TaleLeaf Is](#what-taleleaf-is)
+- [Core Features](#core-features)
+- [How It Works (High-Level Architecture)](#how-it-works-high-level-architecture)
+- [Chunking & Ranking: How TaleLeaf Minimizes Tokens](#chunking--ranking-how-taleleaf-minimizes-tokens)
+- [Development Notes](#development-notes)
+- [Deploying to GitHub Pages](#deploying-to-github-pages)
+
+---
+
+## What TaleLeaf Is
+
+### A Personal Reading Companion
+- Upload a book (PDF or text)
+- Set your current page window (e.g., `start..end`)
+- Ask safe questions that only reference that portion of the book
+
+### A Structured Note System
+- Characters, locations, chapters, and notes are first-class entities
+- Ordering, tags, and spoiler-aware visibility for each entity
+- Designed for deep reading, study, and analysis — not general chit-chat
+
+### An AI Helper With Boundaries
+- AI calls are constrained to the selected reading window or preprocessed context
+- Prevents accidental spoilers by design
+- Useful for summarization, entity extraction, thematic notes, and chapter summaries
+
+---
+
+## Core Features
+
+### Book-Centric Workspace
+Each book has its own editor at `/book/[id]`:
+
+- **Document viewer** – Displays the uploaded PDF/text and support for page navigation.
+- **Context window** – You pick a page range (`window.start..window.end`) that defines the current “reading window” for AI.
+- **Autosave** – Title, window settings, cover, and entity edits are automatically persisted.
+
+### Structured Entities
+TaleLeaf breaks your understanding into distinct sections:
+
+#### Characters
+- Add / edit characters with `name`, `description`, and `tags`.
+- Reorder characters to match importance or reading flow.
+- Optional AI assistance to suggest characters from the current context.
+
+#### Chapters
+- Define chapters with titles, summaries, and tags.
+- Generate AI-powered summaries for a given chapter window.
+- Reorder chapters and keep summaries aligned with pages.
+
+#### Locations
+- Track places/settings with descriptions and tags.
+- Use AI to propose locations from the context window.
+- Reorder locations to build your mental map of the story.
+
+#### Notes
+- Multiple free-form notes, each with title, body, tags, and ordering position.
+- Per-note dirty tracking and Save/Discard controls for batch editing.
+- AI-generated notes for themes, motifs, or custom topics.
+- **All Notes** view aggregates notes, characters, chapters, and locations for study/export.
+
+### AI Chat & Context
+A persistent, left-side AI Chat & Context panel in the book editor:
+
+#### Context Window Selection
+- Select the page range TaleLeaf is allowed to see (e.g., `window.start..window.end`).
+- All AI responses must stay inside this window to avoid spoilers.
+
+#### AI Chat
+- Ask questions such as:
+  - “What is happening between pages 45–60?”
+  - “How has Character X changed in this section?”
+- Messages are displayed as a simple Q/A chat.
+
+#### Model Selection & API Keys
+- Choose an AI provider/model (e.g., OpenAI, Anthropic).
+- Manage local API keys in Settings:
+  - Add / edit / delete keys.
+  - Assign a specific key per provider.
+  - Keys are stored client-side (e.g., `localStorage`) and are never sent to the backend.
+
+### Settings Per Book
+The Settings modal for each book provides:
+
+#### AI
+- Choose default model/provider for AI actions.
+- Manage API keys (add/edit/delete, active/inactive, last-used timestamp).
+
+#### Book
+- Edit title.
+- Re-upload PDF or text.
+- Change cover image.
+- Toggle “Edit current page” text (local override of extraction).
+- Delete book (with confirmation).
+
+---
+
+## How It Works (High-Level Architecture)
+
+### Frontend
+- **Framework:** Next.js App Router (TypeScript, React)
+- **Top-level routes:** `app/page.tsx`, `app/profile/page.tsx`, `app/book/[id]/page.tsx`, `app/auth/callback/page.tsx`
+
+#### Components
+- `components/BookEditor.tsx` – Primary UI shell for a single book.
+- `components/ContextWindow.tsx` – Slider/navigation for selecting pages.
+- `sections/*` – Characters, locations, notes, chapters, all-notes.
+- `ui/*` – Buttons, tooltips, split layout, PDF viewer, toasts, rate limit UI.
+
+### Data & Storage
+
+#### Supabase Postgres
+- Stores normalized entities: `books`, `characters`, `chapters`, `locations`, `notes`, `uploads`.
+- Row Level Security (RLS) ensures users only see their own data.
+
+#### Supabase Storage
+- PDFs and cover files stored under per-user, per-book paths.
+
+#### IndexedDB / LocalStorage
+- Cached PDFs (for offline/fast PDF access).
+- AI settings, API keys, and feature flags.
+
+### AI Layer
+Located in `src/lib/ai-service.ts`:
+
+#### Provider Registry
+- `AI_PROVIDERS` lists supported models, cost metadata, and whether they require a key.
+
+#### Chat Wrapper
+- Builds the system prompt with current context pages.
+- Calls providers (OpenAI/Anthropic) with constructed messages and records key usage locally.
+
+---
+
+## Chunking & Ranking: How TaleLeaf Minimizes Tokens
+
+### Page-Based Context Window
+- The page range selected by the user acts as the root constraint.
+- The uploaded book is split into `pages[]`.
+- When the window is `[start, end]`, context is derived from `pages[start-1..end-1]`.
+
+### Chunking Strategy (Context Preprocess + Supabase)
+
+#### Preprocess Step (`/api/books/[id]/context-preprocess`)
+- Splits pages into smaller chunks (paragraphs or fixed sizes).
+- Stores them in `book_page_chunks` keyed by `book_id` and `page_number`.
+
+#### Query Step (`/api/books/[id]/context-window`)
+- Given a question and a page window:
+  - Filter chunks by page range.
+  - Rank or score chunks by relevance (keyword overlap, BM25, vector search).
+  - Build a concise system prompt plus selected context excerpts.
+
+**System prompt override:** the backend can return `systemPrompt` and `metadata` describing what was used.
+
+### Fallback: Local Context Extraction
+- If Supabase or preprocessing is unavailable, client uses `aiService.extractContextText(book, start, end)` and concatenates raw page text with page markers.
+
+### System Prompt Design
+- Enforces scope: only supplied page excerpts are known.
+- Spoiler guardrails: do not speculate about future plot events.
+
+---
+
+## Development Notes
+
+### Quick start (development)
+
+1. Install dependencies
+
+```powershell
+npm install
+```
+
+2. Run dev server
+
+```powershell
+npm run dev
+```
+
+3. Useful tasks
+
+```powershell
+npm run build       # production build
+npx tsc --noEmit    # type check
+npm run lint        # eslint
+npm run format      # prettier formatting
+```
+
+### Key files & locations
 - AI service: `src/lib/ai-service.ts`
 - Book editor: `src/components/BookEditor.tsx`
 - Settings and API key UI: `src/components/SettingsModal.tsx`
 - Context-window server helpers: `src/app/api/books/[id]/context-window/route.ts`
 
-Contributing
-
-- Fork, create a branch, and open a PR describing the change and the data model impact (if any).
-- Run `npm run format`, `npm run lint`, and `npx tsc --noEmit` before opening a PR.
-
-Contact & notes
-
-- This README is a working summary for developers working on the repository.
-- See `AGENTS.md` for team agent rules and `copilot-instructions.md` for the in-repo copilot guidance.
-
 ---
 
-If you'd like, I can also:
+## Deploying to GitHub Pages
 
-- run `npm run format` and commit the formatted `README.md` now
-- open a small PR with the README
-- implement an optional encrypted local store for API keys
-
-GitHub Pages deployment
-
-- This project can be exported to static HTML using `next export` and published to GitHub Pages.
-- Caveats: The app uses the App Router and some server-side features; only pages and routes that are fully static will be exported successfully. Test locally with `npm run export`.
-
-Quick deploy steps (recommended via GitHub Actions)
-
-1. A workflow is already included at `.github/workflows/deploy-gh-pages.yml` that runs on pushes to `main` and publishes the `out/` directory to the `gh-pages` branch.
-2. If your site will be served from a path (for example: `https://<user>.github.io/<repo>`), set the repository path using `GH_PAGES_BASE_PATH` in CI or rely on `GITHUB_REPOSITORY` (the workflow will pick this up automatically when running on GitHub Actions).
+- The project can be exported to static HTML using `next export` and published to GitHub Pages.
+- The repo is configured to deploy to `https://andrewjle.github.io/TaleLeaf/` using a GitHub Actions workflow that publishes the `out/` directory to `gh-pages`.
 
 Local test
 
@@ -115,68 +288,13 @@ Local test
 # Build and export static HTML to ./out
 npm run export
 
-# Serve the out/ folder locally (optional - using a simple static server)
+# Serve the out/ folder locally
 npx serve out
 ```
 
 Notes
+- `next export` only supports statically-renderable pages. The App Router and server-only APIs may require changes before a full static export works. If you need server runtimes, consider Vercel or Netlify.
 
-- If the app requires server-side Next.js features (API routes, dynamic server rendering), consider deploying to Vercel, Netlify, or another hosting service that supports Next.js server runtimes instead of GitHub Pages.
-- If you'd prefer an npm script that uses the `gh-pages` package instead of using Actions, I can add that as an alternative.
+---
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
-
-## Getting Started
-
-First, run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-## Optional Cloud Persistence (Phase 1)
-
-To enable multi-device sync using Supabase (kept minimal):
-
-1. Create a Supabase project (free tier).
-2. Copy the SQL from `supabase-schema.sql` into the Supabase SQL editor and run it.
-3. Create `.env.local`:
-
-```
-NEXT_PUBLIC_SUPABASE_URL=your_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
-# Optional (future secure server mutations):
-# SUPABASE_SERVICE_ROLE_KEY=service_role_key
-```
-
-4. Restart dev server.
-5. Sign in via magic link (UI to be added) and import local books.
-
-If env vars are absent the app silently falls back to local-only mode.
+If you'd like me to resolve anything else (push after resolving remaining conflicts, run the export and report errors, or switch deploy method), say the word and I'll continue.
