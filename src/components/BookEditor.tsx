@@ -55,6 +55,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
 
     const [message, setMessage] = useState("");
     const [chat, setChat] = useState<AIMessage[]>([]);
+    const [isChatCollapsed, setIsChatCollapsed] = useState(false);
     const debugModeEnabled = featureFlags.debugAIChat;
     const [debugPreviewPayload, setDebugPreviewPayload] = useState<DebugPreviewPayload | null>(null);
     const [isDebugPreviewLoading, setIsDebugPreviewLoading] = useState(false);
@@ -561,138 +562,151 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                     leftPanel={
                         <div className="space-y-6">
                             <div className="rounded-xl border border-gray-200 p-6 bg-white shadow-lg">
-                                <div className="flex items-center gap-3 mb-6">
-                                    <div className="p-2 bg-emerald-50 rounded-lg"><MessageSquareIcon size={20} className="text-emerald-700" /></div>
-                                    <h3 className="text-lg font-semibold text-gray-900">AI Chat & Context</h3>
+                                <div className="flex items-center justify-between gap-3 mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-emerald-50 rounded-lg"><MessageSquareIcon size={20} className="text-emerald-700" /></div>
+                                        <h3 className="text-lg font-semibold text-gray-900">AI Chat & Context</h3>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsChatCollapsed(prev => !prev)}
+                                        className="text-xs px-2 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
+                                    >
+                                        {isChatCollapsed ? 'Show' : 'Hide'}
+                                    </button>
                                 </div>
-                                {contextWindowV2Enabled ? (
-                                    <div className="mt-4 text-xs flex flex-col gap-3 rounded-lg bg-slate-50 border border-slate-200 px-4 py-4">
-                                        {isCheckingReadiness && (
-                                            <div className="flex items-center gap-2 text-slate-600">
-                                                <span className="h-2 w-2 rounded-full bg-slate-500 animate-pulse" />
-                                                <span>Checking whether TaleLeaf has already read this book…</span>
-                                            </div>
-                                        )}
-                                        {isGateVisible && (
-                                            <>
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <p className="font-medium text-slate-800">Let TaleLeaf read this book first.</p>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="primary"
-                                                        className="text-xs px-3"
-                                                        disabled={contextPrepStatus === 'indexing'}
-                                                        onClick={() => {
-                                                            setContextProgress(null);
-                                                            void triggerContextPreprocess();
-                                                        }}
-                                                    >
-                                                        {contextPrepStatus === 'indexing' ? 'Reading…' : 'Read this book'}
-                                                    </Button>
-                                                </div>
-                                                {contextPrepStatus === 'indexing' && (
-                                                    <div className="flex flex-col gap-2">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />
-                                                            <span className="text-[11px] text-slate-600">TaleLeaf is reading your selected pages so answers stay in-window.</span>
-                                                        </div>
-                                                        <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden shadow-inner">
-                                                            <div
-                                                                className="h-full bg-emerald-500 transition-all duration-500"
-                                                                style={{ width: contextProgress && contextProgress.total > 0 ? `${Math.min(100, Math.max(0, (contextProgress.processed / contextProgress.total) * 100))}%` : '20%' }}
-                                                            />
-                                                        </div>
-                                                        {contextProgress && contextProgress.total > 0 && (
-                                                            <p className="text-[11px] text-slate-500">{contextProgress.processed}/{contextProgress.total} batches processed.</p>
-                                                        )}
-                                                    </div>
-                                                )}
-                                                {contextPrepStatus === 'idle' && (
-                                                    <p className="text-[11px] text-slate-600">Once TaleLeaf reads this range, answers will stay within your selected pages.</p>
-                                                )}
-                                                {contextPrepStatus === 'error' && (
-                                                    <p className="text-[11px] text-rose-700">There was a problem reading the book. Try again in a moment.</p>
-                                                )}
-                                            </>
-                                        )}
-                                        {!isCheckingReadiness && contextPrepStatus === 'ready' && (
-                                            <div className="flex items-center gap-2 text-emerald-700">
-                                                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-[10px] text-white">✓</span>
-                                                <span>TaleLeaf has finished reading this book and is ready for questions.</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div className="mt-4 text-xs text-slate-600 bg-slate-50 border border-slate-200 px-3 py-2 rounded-lg">
-                                        Connect Supabase to enable richer retrieval. We will still use your selected pages locally.
-                                    </div>
-                                )}
-                                {showChatContent && (
+                                {!isChatCollapsed && (
                                     <>
-                                        <div className="mt-4">
-                                            <ContextWindow window={local.window} pageCount={pageCount} onChange={handleContextWindowChange} />
-                                        </div>
-                                        <div className="mt-6 space-y-4 mb-4 max-h-64 overflow-y-auto bg-white/60 rounded-lg">
-                                            {chat.length === 0 && (
-                                                <div className="text-center py-6 text-slate-600">
-                                                    <div className="text-3xl mb-3">🤖</div>
-                                                    <p className="text-sm font-medium">Ask me anything about your book.</p>
-                                                    <p className="text-xs text-slate-500 mt-1">I can only see pages {local.window.start}-{local.window.end}</p>
-                                                </div>
-                                            )}
-                                            {chat.map((msg, i) => (
-                                                <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                                    <div className={`max-w-sm p-3 rounded-2xl shadow-sm ${msg.role === 'user' ? 'bg-emerald-700 text-white' : 'bg-white border border-slate-200'}`}>
-                                                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                        {contextWindowV2Enabled ? (
+                                            <div className="mt-4 text-xs flex flex-col gap-3 rounded-lg bg-slate-50 border border-slate-200 px-4 py-4">
+                                                {isCheckingReadiness && (
+                                                    <div className="flex items-center gap-2 text-slate-600">
+                                                        <span className="h-2 w-2 rounded-full bg-slate-500 animate-pulse" />
+                                                        <span>Checking whether TaleLeaf has already read this book…</span>
                                                     </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <div className="flex flex-col gap-3 mt-2">
-                                            <div className="flex gap-3">
-                                                <input type="text" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Ask about characters, plot, themes..." className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-400 focus:border-transparent bg-white" onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()} disabled={isAILoading} />
-                                                {debugModeEnabled ? (
-                                                    <div className="flex flex-col gap-2">
-                                                        <Button onClick={handlePreviewClick} disabled={!message.trim() || isDebugPreviewLoading} isLoading={isDebugPreviewLoading} variant="primary" className="text-[11px] font-semibold">Preview AI prompt</Button>
-                                                        <Button onClick={handleSendMessage} disabled={!message.trim() || isAILoading} isLoading={isAILoading} variant="secondary" className="text-[11px] font-semibold border-emerald-300 text-emerald-700">Send</Button>
-                                                    </div>
-                                                ) : (
-                                                    <Button onClick={handleSendMessage} disabled={!message.trim() || isAILoading} isLoading={isAILoading} variant="primary" className="bg-emerald-700 hover:bg-emerald-800">Send</Button>
                                                 )}
-                                            </div>
-                                            {debugModeEnabled && (
-                                                <div className="space-y-2">
-                                                    {debugPreviewError && <div className="text-[11px] text-rose-600">{debugPreviewError}</div>}
-                                                    {debugPreviewPayload && (
-                                                        <div className="rounded-xl border border-emerald-100 bg-emerald-50/80 p-3 text-xs space-y-3">
-                                                            <div className="flex items-start justify-between gap-2">
-                                                                <div>
-                                                                    <p className="text-[12px] font-semibold text-slate-900">AI request preview</p>
-                                                                    <p className="text-[10px] text-slate-500">{debugPreviewPayload.contextSource}</p>
+                                                {isGateVisible && (
+                                                    <>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <p className="font-medium text-slate-800">Let TaleLeaf read this book first.</p>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="primary"
+                                                                className="text-xs px-3"
+                                                                disabled={contextPrepStatus === 'indexing'}
+                                                                onClick={() => {
+                                                                    setContextProgress(null);
+                                                                    void triggerContextPreprocess();
+                                                                }}
+                                                            >
+                                                                {contextPrepStatus === 'indexing' ? 'Reading…' : 'Read this book'}
+                                                            </Button>
+                                                        </div>
+                                                        {contextPrepStatus === 'indexing' && (
+                                                            <div className="flex flex-col gap-2">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />
+                                                                    <span className="text-[11px] text-slate-600">TaleLeaf is reading your selected pages so answers stay in-window.</span>
                                                                 </div>
-                                                                <button type="button" onClick={() => setDebugPreviewPayload(null)} className="text-[10px] text-slate-500 hover:text-slate-700">Hide</button>
-                                                            </div>
-                                                            <div className="space-y-2">
-                                                                <div>
-                                                                    <p className="text-[10px] font-semibold text-slate-500">System prompt</p>
-                                                                    <pre className="whitespace-pre-wrap max-h-48 overflow-y-auto rounded-md border border-slate-200 bg-white/90 p-2 leading-snug text-[11px] text-slate-900">{debugPreviewPayload.systemPrompt}</pre>
+                                                                <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden shadow-inner">
+                                                                    <div
+                                                                        className="h-full bg-emerald-500 transition-all duration-500"
+                                                                        style={{ width: contextProgress && contextProgress.total > 0 ? `${Math.min(100, Math.max(0, (contextProgress.processed / contextProgress.total) * 100))}%` : '20%' }}
+                                                                    />
                                                                 </div>
-                                                                <div>
-                                                                    <p className="text-[10px] font-semibold text-slate-500">Messages</p>
-                                                                    <pre className="max-h-48 overflow-y-auto rounded-md border border-slate-200 bg-white/90 p-2 text-[10px] leading-snug text-slate-900">{JSON.stringify(debugPreviewPayload.messages, null, 2)}</pre>
-                                                                </div>
-                                                                {debugPreviewPayload.contextSnippet && (
-                                                                    <div>
-                                                                        <p className="text-[10px] font-semibold text-slate-500">Context snippet</p>
-                                                                        <pre className="whitespace-pre-wrap max-h-48 overflow-y-auto rounded-md border border-slate-200 bg-white/90 p-2 text-[10px] leading-snug text-slate-900">{debugPreviewPayload.contextSnippet}</pre>
-                                                                    </div>
+                                                                {contextProgress && contextProgress.total > 0 && (
+                                                                    <p className="text-[11px] text-slate-500">{contextProgress.processed}/{contextProgress.total} batches processed.</p>
                                                                 )}
                                                             </div>
+                                                        )}
+                                                        {contextPrepStatus === 'idle' && (
+                                                            <p className="text-[11px] text-slate-600">Once TaleLeaf reads this range, answers will stay within your selected pages.</p>
+                                                        )}
+                                                        {contextPrepStatus === 'error' && (
+                                                            <p className="text-[11px] text-rose-700">There was a problem reading the book. Try again in a moment.</p>
+                                                        )}
+                                                    </>
+                                                )}
+                                                {!isCheckingReadiness && contextPrepStatus === 'ready' && (
+                                                    <div className="flex items-center gap-2 text-emerald-700">
+                                                        <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-[10px] text-white">✓</span>
+                                                        <span>TaleLeaf has finished reading this book and is ready for questions.</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="mt-4 text-xs text-slate-600 bg-slate-50 border border-slate-200 px-3 py-2 rounded-lg">
+                                                Connect Supabase to enable richer retrieval. We will still use your selected pages locally.
+                                            </div>
+                                        )}
+                                        {showChatContent && (
+                                            <>
+                                                <div className="mt-4">
+                                                    <ContextWindow window={local.window} pageCount={pageCount} onChange={handleContextWindowChange} />
+                                                </div>
+                                                <div className="mt-6 space-y-4 mb-4 max-h-64 overflow-y-auto bg-white/60 rounded-lg">
+                                                    {chat.length === 0 && (
+                                                        <div className="text-center py-6 text-slate-600">
+                                                            <div className="text-3xl mb-3">🤖</div>
+                                                            <p className="text-sm font-medium">Ask me anything about your book.</p>
+                                                            <p className="text-xs text-slate-500 mt-1">I can only see pages {local.window.start}-{local.window.end}</p>
+                                                        </div>
+                                                    )}
+                                                    {chat.map((msg, i) => (
+                                                        <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                                            <div className={`max-w-sm p-3 rounded-2xl shadow-sm ${msg.role === 'user' ? 'bg-emerald-700 text-white' : 'bg-white border border-slate-200'}`}>
+                                                                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <div className="flex flex-col gap-3 mt-2">
+                                                    <div className="flex gap-3">
+                                                        <input type="text" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Ask about characters, plot, themes..." className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-400 focus:border-transparent bg-white" onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()} disabled={isAILoading} />
+                                                        {debugModeEnabled ? (
+                                                            <div className="flex flex-col gap-2">
+                                                                <Button onClick={handlePreviewClick} disabled={!message.trim() || isDebugPreviewLoading} isLoading={isDebugPreviewLoading} variant="primary" className="text-[11px] font-semibold">Preview AI prompt</Button>
+                                                                <Button onClick={handleSendMessage} disabled={!message.trim() || isAILoading} isLoading={isAILoading} variant="secondary" className="text-[11px] font-semibold border-emerald-300 text-emerald-700">Send</Button>
+                                                            </div>
+                                                        ) : (
+                                                            <Button onClick={handleSendMessage} disabled={!message.trim() || isAILoading} isLoading={isAILoading} variant="primary" className="bg-emerald-700 hover:bg-emerald-800">Send</Button>
+                                                        )}
+                                                    </div>
+                                                    {debugModeEnabled && (
+                                                        <div className="space-y-2">
+                                                            {debugPreviewError && <div className="text-[11px] text-rose-600">{debugPreviewError}</div>}
+                                                            {debugPreviewPayload && (
+                                                                <div className="rounded-xl border border-emerald-100 bg-emerald-50/80 p-3 text-xs space-y-3">
+                                                                    <div className="flex items-start justify-between gap-2">
+                                                                        <div>
+                                                                            <p className="text-[12px] font-semibold text-slate-900">AI request preview</p>
+                                                                            <p className="text-[10px] text-slate-500">{debugPreviewPayload.contextSource}</p>
+                                                                        </div>
+                                                                        <button type="button" onClick={() => setDebugPreviewPayload(null)} className="text-[10px] text-slate-500 hover:text-slate-700">Hide</button>
+                                                                    </div>
+                                                                    <div className="space-y-2">
+                                                                        <div>
+                                                                            <p className="text-[10px] font-semibold text-slate-500">System prompt</p>
+                                                                            <pre className="whitespace-pre-wrap max-h-48 overflow-y-auto rounded-md border border-slate-200 bg-white/90 p-2 leading-snug text-[11px] text-slate-900">{debugPreviewPayload.systemPrompt}</pre>
+                                                                        </div>
+                                                                        <div>
+                                                                            <p className="text-[10px] font-semibold text-slate-500">Messages</p>
+                                                                            <pre className="max-h-48 overflow-y-auto rounded-md border border-slate-200 bg-white/90 p-2 text-[10px] leading-snug text-slate-900">{JSON.stringify(debugPreviewPayload.messages, null, 2)}</pre>
+                                                                        </div>
+                                                                        {debugPreviewPayload.contextSnippet && (
+                                                                            <div>
+                                                                                <p className="text-[10px] font-semibold text-slate-500">Context snippet</p>
+                                                                                <pre className="whitespace-pre-wrap max-h-48 overflow-y-auto rounded-md border border-slate-200 bg-white/90 p-2 text-[10px] leading-snug text-slate-900">{debugPreviewPayload.contextSnippet}</pre>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
-                                            )}
-                                        </div>
+                                            </>
+                                        )}
                                     </>
                                 )}
                             </div>
