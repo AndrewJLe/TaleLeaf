@@ -1,5 +1,8 @@
 # TaleLeaf
 
+## Live Link
+https://tale-leaf.vercel.app/
+
 TaleLeaf is a spoiler-safe reading companion that helps you turn raw narrative into structured understanding. It sits alongside your books and lets you capture characters, locations, chapters, and notes while using AI that stays strictly inside your current reading window.
 
 Think of it as a focused **reading workbench** for people who annotate, analyze, or study long-form fiction and narrative non-fiction.
