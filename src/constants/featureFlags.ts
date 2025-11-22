@@ -2,13 +2,15 @@
 // Controls rollout of new features behind development toggles
 
 interface FeatureFlags {
+  // Keep legacy flags present for runtime compatibility, but the UI
+  // only exposes `debugAIChat` now.
   notesV2: boolean;
   locationsV2: boolean;
   aiSummaries: boolean;
   collabPreview: boolean;
-  confirmDeleteEntities: boolean; // show confirm dialog before deleting entity cards
-  telemetryBasic: boolean; // enable lightweight client telemetry events
-  contextWindowV2: boolean; // enable new contextual retrieval pipeline
+  confirmDeleteEntities: boolean;
+  telemetryBasic: boolean;
+  debugAIChat: boolean;
 }
 
 // Parse query parameters for flag overrides (dev/testing)
@@ -22,8 +24,10 @@ function parseQueryFlags(): Partial<FeatureFlags> {
   const flags: Partial<FeatureFlags> = {};
   flagParam.split(',').forEach(flag => {
     const [key, value] = flag.split(':');
-    if (key && ['notesV2', 'locationsV2', 'aiSummaries', 'collabPreview', 'confirmDeleteEntities', 'telemetryBasic', 'contextWindowV2'].includes(key)) {
-      flags[key as keyof FeatureFlags] = value !== 'off' && value !== 'false';
+    const enabled = value !== 'off' && value !== 'false';
+    if (!key) return;
+    if (['notesV2', 'locationsV2', 'aiSummaries', 'collabPreview', 'confirmDeleteEntities', 'telemetryBasic', 'debugAIChat'].includes(key)) {
+      (flags as any)[key] = enabled;
     }
   });
 
@@ -33,22 +37,22 @@ function parseQueryFlags(): Partial<FeatureFlags> {
 // Get feature flag state (localStorage + query param overrides)
 function getFeatureFlags(): FeatureFlags {
   const defaults: FeatureFlags = {
-    // Enable normalized notes model by default now that book_notes table is live
+    // Legacy/default flags retained for compatibility
     notesV2: true,
     locationsV2: false,
     aiSummaries: false,
     collabPreview: false,
     confirmDeleteEntities: true,
     telemetryBasic: true,
-    contextWindowV2: false,
-    // Soft delete is now always on (deleted_at columns); flag removed
+    // New debug-only flag
+    debugAIChat: false
   };
 
   if (typeof window === 'undefined') return defaults;
 
   // Load from localStorage
   const stored: Partial<FeatureFlags> = {};
-  Object.keys(defaults).forEach(key => {
+  Object.keys(defaults).forEach((key) => {
     const value = localStorage.getItem(`ff.${key}`);
     if (value === '1' || value === 'true') {
       stored[key as keyof FeatureFlags] = true;
@@ -75,7 +79,7 @@ function setFeatureFlag(flag: keyof FeatureFlags, enabled: boolean) {
   window.location.reload();
 }
 
-export const featureFlags = getFeatureFlags();
+export const featureFlags = getFeatureFlags() as any;
 export { setFeatureFlag };
 export type { FeatureFlags };
 

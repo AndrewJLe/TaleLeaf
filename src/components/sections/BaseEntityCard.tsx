@@ -460,7 +460,7 @@ export function BaseEntityCard<T extends BaseEntity>({
             >
               <Button
                 onClick={() => {
-                  if (featureFlags.confirmDeleteEntities) {
+                  if ((featureFlags as any).confirmDeleteEntities) {
                     setConfirmingDelete(true);
                   } else {
                     performDelete();
@@ -499,7 +499,7 @@ export function BaseEntityCard<T extends BaseEntity>({
         <div className="absolute left-0 top-[-10%] -translate-y-1/4 bg-gradient-to-r from-transparent via-white/70 to-transparent w-12 h-[300%] rotate-45 -skew-x-12 opacity-80 blur-md"></div>
       </div>
 
-      {confirmingDelete && featureFlags.confirmDeleteEntities && (
+      {confirmingDelete && (featureFlags as any).confirmDeleteEntities && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white border border-red-200 rounded-xl shadow-lg p-5 w-full max-w-sm">
             <h4 className="text-sm font-semibold text-gray-900 mb-2">Delete {config.entityType}?</h4>

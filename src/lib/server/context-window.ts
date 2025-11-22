@@ -273,8 +273,8 @@ export async function buildContextWindowResult(params: BuildContextParams): Prom
     bookId,
     window,
     question,
-    maxContextTokens = 1800,
-    desiredK = { min: 4, max: 8 }
+    maxContextTokens = 9999,
+    desiredK = { min: 4, max: 12 }
   } = params;
 
   const { data: chapterMapRows, error: chapterErr } = await supabase
