@@ -14,17 +14,16 @@ const repoNameFromEnv = (() => {
   }
 })();
 
-// Enable the GH Pages path only for production builds. During local `next dev`
-// we want the app to be served at `/` so visiting `http://localhost:3000/` works.
-const isGhPages = process.env.NODE_ENV === "production";
-
+// Enable GitHub Pages settings only when explicitly building for static export.
 const isProd = process.env.NODE_ENV === "production";
+const isStaticExport = process.env.STATIC_EXPORT === "true" && isProd;
+const isGhPages = isStaticExport;
 
 const nextConfig: NextConfig = {
   // Use `output: 'export'` and `trailingSlash` only for production static exports
   // (e.g., GitHub Pages). During local development we serve normally so routes
   // such as `/` work without needing the GH Pages path.
-  ...(isProd ? { output: "export", trailingSlash: true } : {}),
+  ...(isStaticExport ? { output: "export", trailingSlash: true } : {}),
   // During CI builds for static export we can skip ESLint to avoid blocking
   // the export on non-critical lint/type warnings. Consider fixing lint
   // errors for a stricter CI later.

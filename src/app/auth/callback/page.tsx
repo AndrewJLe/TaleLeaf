@@ -1,11 +1,10 @@
 "use client";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabaseClient } from "../../../lib/supabase-client";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
-  const search = useSearchParams();
   const [status, setStatus] = useState("Finishing sign-in...");
   const [error, setError] = useState<string | null>(null);
 
@@ -41,7 +40,7 @@ export default function AuthCallbackPage() {
     return () => {
       cancelled = true;
     };
-  }, [router, search]);
+  }, [router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-emerald-25 to-amber-50/30 p-6">
