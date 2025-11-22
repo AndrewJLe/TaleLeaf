@@ -20,10 +20,17 @@ const isStaticExport = process.env.STATIC_EXPORT === "true" && isProd;
 const isGhPages = isStaticExport;
 
 const nextConfig: NextConfig = {
-  // Use `output: 'export'` and `trailingSlash` only for production static exports
-  // (e.g., GitHub Pages). During local development we serve normally so routes
-  // such as `/` work without needing the GH Pages path.
-  ...(isStaticExport ? { output: "export", trailingSlash: true } : {}),
+  // For now, disable static HTML export at the Next.js level so that
+  // dynamic API routes under `/api/books/...` are allowed. We still
+  // support GitHub Pages via a separate `npm run export` step that
+  // can set STATIC_EXPORT=true and run `next export` after `next build`.
+  // This keeps `next build` green while avoiding the `dynamic`/`revalidate`
+  // restrictions on API routes.
+  //
+  // If STATIC_EXPORT is explicitly enabled, we still set `trailingSlash`
+  // for better static hosting behavior, but we no longer force
+  // `output: 'export'` here.
+  ...(isStaticExport ? { trailingSlash: true } : {}),
   // During CI builds for static export we can skip ESLint to avoid blocking
   // the export on non-critical lint/type warnings. Consider fixing lint
   // errors for a stricter CI later.

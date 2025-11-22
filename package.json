@@ -12,13 +12,13 @@
     "deploy:gh-pages": "echo 'This repo uses a GitHub Action to publish the exported site to the gh-pages branch.'"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
     "lucide-react": "^0.460.0",
     "next": "15.5.0",
     "pdfjs-dist": "^4.8.69",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "react-pdf": "^9.1.1",
-    "@supabase/supabase-js": "^2.45.4"
+    "react-pdf": "^9.1.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -26,6 +26,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "15.5.0",
     "tailwindcss": "^4",
