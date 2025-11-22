@@ -39,9 +39,26 @@ export interface AIMessage {
     content: string;
 }
 
+export type ApiKeyStatus = 'active' | 'inactive';
+
+export interface StoredApiKey {
+    id: string;
+    providerId: string;
+    name: string;
+    secret: string;
+    status: ApiKeyStatus;
+    createdAt: number;
+    lastUsedAt?: number;
+}
+
 export interface AISettings {
     provider: string;
+    /**
+     * @deprecated legacy direct provider -> key mapping kept for migration fallback
+     */
     apiKeys: Record<string, string>;
+    storedApiKeys: StoredApiKey[];
+    providerKeyMap: Record<string, string | null>;
 }
 
 export interface TokenEstimate {
@@ -52,30 +69,8 @@ export interface TokenEstimate {
     provider: string;
 }
 
-export interface TokenUsage {
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-    cost: number;
-    timestamp: number;
-    action: string;
-}
-
-export interface TokenBudget {
-    dailyLimit: number;    // dollars per day
-    monthlyLimit: number;  // dollars per month
-    warningThreshold: number; // percentage (0.8 = 80%)
-}
-
 interface ChatOptions {
     systemPromptOverride?: string;
-}
-
-export interface TokenStats {
-    todayUsage: number;    // dollars spent today
-    monthUsage: number;    // dollars spent this month
-    sessionUsage: number;  // dollars spent this session
-    usageHistory: TokenUsage[];
 }
 
 export interface RateLimitInfo {
@@ -101,20 +96,9 @@ export interface TokenBucketStatus {
 class AIService {
     private settings: AISettings = {
         provider: 'openai-gpt4o-mini',
-        apiKeys: {}
-    };
-
-    private tokenBudget: TokenBudget = {
-        dailyLimit: 5.00,     // $5 per day default
-        monthlyLimit: 50.00,  // $50 per month default
-        warningThreshold: 0.8 // 80% warning
-    };
-
-    private tokenStats: TokenStats = {
-        todayUsage: 0,
-        monthUsage: 0,
-        sessionUsage: 0,
-        usageHistory: []
+        apiKeys: {},
+        storedApiKeys: [],
+        providerKeyMap: {}
     };
 
     private tokenBuckets: Map<string, TokenBucketStatus> = new Map();
@@ -128,18 +112,8 @@ class AIService {
                 this.settings = { ...this.settings, ...JSON.parse(saved) };
             }
 
-            const savedBudget = localStorage.getItem('taleleaf:token-budget');
-            if (savedBudget) {
-                this.tokenBudget = { ...this.tokenBudget, ...JSON.parse(savedBudget) };
-            }
-
-            const savedStats = localStorage.getItem('taleleaf:token-stats');
-            if (savedStats) {
-                const stats = JSON.parse(savedStats);
-                this.tokenStats = { ...this.tokenStats, ...stats };
-                // Reset daily usage if it's a new day
-                this.checkAndResetDailyUsage();
-            }
+            this.ensureSettingsShape();
+            this.migrateLegacyApiKeys();
 
             const savedBuckets = localStorage.getItem('taleleaf:token-buckets');
             if (savedBuckets) {
@@ -152,6 +126,261 @@ class AIService {
             // Initialize default rate limits for known providers
             this.initializeRateLimits();
         }
+    }
+
+    private persistSettings() {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('taleleaf:ai-settings', JSON.stringify(this.settings));
+        }
+    }
+
+    private ensureSettingsShape() {
+        if (!this.settings.apiKeys) {
+            this.settings.apiKeys = {};
+        }
+        if (!Array.isArray(this.settings.storedApiKeys)) {
+            this.settings.storedApiKeys = [];
+        }
+        if (!this.settings.providerKeyMap || typeof this.settings.providerKeyMap !== 'object') {
+            this.settings.providerKeyMap = {};
+        }
+    }
+
+    private migrateLegacyApiKeys() {
+        const legacyEntries = Object.entries(this.settings.apiKeys || {});
+        if (!legacyEntries.length) {
+            return;
+        }
+
+        let migrated = false;
+        legacyEntries.forEach(([providerId, secret]) => {
+            if (!secret) {
+                return;
+            }
+
+            const alreadyExists = this.settings.storedApiKeys.some(k => k.providerId === providerId && k.secret === secret);
+            if (alreadyExists) {
+                return;
+            }
+
+            const provider = AI_PROVIDERS.find(p => p.id === providerId);
+            const newKey: StoredApiKey = {
+                id: this.generateKeyId(),
+                providerId,
+                name: provider ? `${provider.name} Key` : 'API Key',
+                secret,
+                status: 'active',
+                createdAt: Date.now()
+            };
+
+            this.settings.storedApiKeys.push(newKey);
+            if (!this.settings.providerKeyMap[providerId]) {
+                this.settings.providerKeyMap[providerId] = newKey.id;
+            }
+
+            migrated = true;
+        });
+
+        if (migrated) {
+            this.persistSettings();
+        }
+    }
+
+    private generateKeyId(): string {
+        const random = Math.random().toString(36).slice(2, 10);
+        try {
+            if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+                return crypto.randomUUID();
+            }
+        } catch {
+            // Ignore and fall back to random string
+        }
+        return `key_${random}`;
+    }
+
+    private getProviderAliases(providerId: string): string[] {
+        if (providerId.startsWith('openai-')) {
+            return ['openai-gpt4o-mini', 'openai-gpt4o'];
+        }
+        return [providerId];
+    }
+
+    private findStoredKeyById(id?: string | null): StoredApiKey | undefined {
+        if (!id) {
+            return undefined;
+        }
+        return this.settings.storedApiKeys.find(key => key.id === id);
+    }
+
+    private syncLegacyApiKey(providerId: string) {
+        const directSelection = this.findStoredKeyById(this.settings.providerKeyMap[providerId] || null);
+        if (directSelection) {
+            this.settings.apiKeys[providerId] = directSelection.secret;
+        } else {
+            delete this.settings.apiKeys[providerId];
+        }
+    }
+
+    getStoredApiKeys(providerId?: string): StoredApiKey[] {
+        const list = providerId
+            ? this.settings.storedApiKeys.filter(key => key.providerId === providerId)
+            : this.settings.storedApiKeys;
+
+        return list.map(key => ({ ...key }));
+    }
+
+    addStoredApiKey(input: { name: string; providerId: string; secret: string; status?: ApiKeyStatus }): StoredApiKey {
+        const key: StoredApiKey = {
+            id: this.generateKeyId(),
+            providerId: input.providerId,
+            name: input.name || 'API Key',
+            secret: input.secret,
+            status: input.status ?? 'active',
+            createdAt: Date.now()
+        };
+
+        this.settings.storedApiKeys = [...this.settings.storedApiKeys, key];
+
+        if (!this.settings.providerKeyMap[input.providerId]) {
+            this.settings.providerKeyMap[input.providerId] = key.id;
+        }
+
+        this.syncLegacyApiKey(input.providerId);
+        this.persistSettings();
+        return key;
+    }
+
+    updateStoredApiKey(id: string, updates: Partial<Omit<StoredApiKey, 'id' | 'providerId' | 'createdAt'>>): StoredApiKey | null {
+        const idx = this.settings.storedApiKeys.findIndex(k => k.id === id);
+        if (idx === -1) {
+            return null;
+        }
+
+        const original = this.settings.storedApiKeys[idx];
+        const updated: StoredApiKey = {
+            ...original,
+            ...updates,
+            lastUsedAt: updates.lastUsedAt ?? original.lastUsedAt
+        };
+
+        this.settings.storedApiKeys = [
+            ...this.settings.storedApiKeys.slice(0, idx),
+            updated,
+            ...this.settings.storedApiKeys.slice(idx + 1)
+        ];
+
+        const wasSelected = this.settings.providerKeyMap[original.providerId] === id;
+        let selectionChanged = false;
+
+        if (wasSelected && updates.status === 'inactive') {
+            this.settings.providerKeyMap[original.providerId] = null;
+            selectionChanged = true;
+        }
+
+        if (wasSelected && updates.secret !== undefined) {
+            selectionChanged = true;
+        }
+
+        if (selectionChanged) {
+            this.syncLegacyApiKey(original.providerId);
+        }
+
+        this.persistSettings();
+        return updated;
+    }
+
+    deleteStoredApiKey(id: string) {
+        const key = this.settings.storedApiKeys.find(k => k.id === id);
+        if (!key) {
+            return;
+        }
+
+        this.settings.storedApiKeys = this.settings.storedApiKeys.filter(k => k.id !== id);
+
+        if (this.settings.providerKeyMap[key.providerId] === id) {
+            this.settings.providerKeyMap[key.providerId] = null;
+            this.syncLegacyApiKey(key.providerId);
+        }
+
+        this.persistSettings();
+    }
+
+    selectApiKeyForProvider(providerId: string, keyId: string | null) {
+        if (keyId) {
+            const key = this.settings.storedApiKeys.find(k => k.id === keyId && k.providerId === providerId);
+            if (!key) {
+                throw new Error('API key does not match provider');
+            }
+            this.settings.providerKeyMap[providerId] = keyId;
+        } else {
+            this.settings.providerKeyMap[providerId] = null;
+        }
+
+        this.syncLegacyApiKey(providerId);
+        this.persistSettings();
+    }
+
+    getSelectedApiKeyId(providerId: string): string | null {
+        return this.settings.providerKeyMap[providerId] || null;
+    }
+
+    private getDirectSelectedApiKey(providerId: string): StoredApiKey | undefined {
+        return this.findStoredKeyById(this.getSelectedApiKeyId(providerId));
+    }
+
+    private getOperationalApiKey(providerId: string): StoredApiKey | undefined {
+        const aliases = this.getProviderAliases(providerId);
+
+        for (const alias of aliases) {
+            const key = this.findStoredKeyById(this.settings.providerKeyMap[alias] || null);
+            if (key && key.status === 'active') {
+                return key;
+            }
+        }
+
+        for (const alias of aliases) {
+            const activeKeys = this.settings.storedApiKeys.filter(k => k.providerId === alias && k.status === 'active');
+            if (activeKeys.length === 1) {
+                const fallback = activeKeys[0];
+                this.settings.providerKeyMap[alias] = fallback.id;
+                this.syncLegacyApiKey(alias);
+                this.persistSettings();
+                return fallback;
+            }
+        }
+
+        return undefined;
+    }
+
+    getSelectedApiKey(providerId: string): StoredApiKey | undefined {
+        const key = this.getDirectSelectedApiKey(providerId);
+        return key ? { ...key } : undefined;
+    }
+
+    getSelectedApiKeySecret(providerId: string): string | null {
+        const operational = this.getOperationalApiKey(providerId);
+        if (operational) {
+            return operational.secret;
+        }
+
+        const aliases = this.getProviderAliases(providerId);
+        for (const alias of aliases) {
+            const legacy = this.settings.apiKeys[alias];
+            if (legacy) {
+                return legacy;
+            }
+        }
+
+        return null;
+    }
+
+    recordApiKeyUsage(providerId: string) {
+        const key = this.getOperationalApiKey(providerId);
+        if (!key) {
+            return;
+        }
+
+        this.updateStoredApiKey(key.id, { lastUsedAt: Date.now() });
     }
 
     // Rate limit management methods
@@ -292,7 +521,6 @@ class AIService {
         return null;
     }
 
-    // Token estimation utilities
     estimateTokens(text: string): number {
         // Rough estimation: ~4 characters per token for English text
         // This is an approximation - actual tokenization varies by model
@@ -308,109 +536,6 @@ class AIService {
         };
     }
 
-    estimateRequestCost(contextText: string, promptText: string, estimatedOutputTokens: number = 500): TokenEstimate {
-        const provider = AI_PROVIDERS.find(p => p.id === this.settings.provider);
-        const costs = this.getProviderCosts();
-        const providerCost = costs[this.settings.provider];
-
-        const systemPromptTokens = this.estimateTokens(this.buildSystemPrompt(contextText));
-
-        const userPromptTokens = this.estimateTokens(promptText);
-        const inputTokens = systemPromptTokens + userPromptTokens;
-        const totalTokens = inputTokens + estimatedOutputTokens;
-
-        const estimatedCost = providerCost
-            ? (inputTokens * providerCost.input + estimatedOutputTokens * providerCost.output) / 1000000
-            : 0;
-
-        return {
-            inputTokens,
-            estimatedOutputTokens,
-            totalTokens,
-            estimatedCost,
-            provider: provider?.name || 'Unknown'
-        };
-    }
-
-    // Budget and usage tracking methods
-    checkAndResetDailyUsage() {
-        const today = new Date().toDateString();
-        const lastUsageDate = this.tokenStats.usageHistory[this.tokenStats.usageHistory.length - 1];
-
-        if (!lastUsageDate || new Date(lastUsageDate.timestamp).toDateString() !== today) {
-            this.tokenStats.todayUsage = 0;
-            this.saveTokenStats();
-        }
-    }
-
-    updateTokenBudget(budget: Partial<TokenBudget>) {
-        this.tokenBudget = { ...this.tokenBudget, ...budget };
-        if (typeof window !== 'undefined') {
-            localStorage.setItem('taleleaf:token-budget', JSON.stringify(this.tokenBudget));
-        }
-    }
-
-    getTokenBudget(): TokenBudget {
-        return this.tokenBudget;
-    }
-
-    getTokenStats(): TokenStats {
-        return this.tokenStats;
-    }
-
-    recordTokenUsage(inputTokens: number, outputTokens: number, cost: number, action: string) {
-        const usage: TokenUsage = {
-            inputTokens,
-            outputTokens,
-            totalTokens: inputTokens + outputTokens,
-            cost,
-            timestamp: Date.now(),
-            action
-        };
-
-        this.tokenStats.usageHistory.push(usage);
-        this.tokenStats.sessionUsage += cost;
-        this.tokenStats.todayUsage += cost;
-        this.tokenStats.monthUsage += cost;
-
-        // Keep only last 100 usage records
-        if (this.tokenStats.usageHistory.length > 100) {
-            this.tokenStats.usageHistory = this.tokenStats.usageHistory.slice(-100);
-        }
-
-        this.saveTokenStats();
-    }
-
-    private saveTokenStats() {
-        if (typeof window !== 'undefined') {
-            localStorage.setItem('taleleaf:token-stats', JSON.stringify(this.tokenStats));
-        }
-    }
-
-    getRemainingBudget(): { daily: number; monthly: number; sessionWarning: boolean } {
-        const dailyRemaining = Math.max(0, this.tokenBudget.dailyLimit - this.tokenStats.todayUsage);
-        const monthlyRemaining = Math.max(0, this.tokenBudget.monthlyLimit - this.tokenStats.monthUsage);
-
-        const sessionWarning = this.tokenStats.sessionUsage > (this.tokenBudget.dailyLimit * 0.2); // 20% of daily limit in one session
-
-        return {
-            daily: dailyRemaining,
-            monthly: monthlyRemaining,
-            sessionWarning
-        };
-    }
-
-    isOverBudget(): { daily: boolean; monthly: boolean; warning: boolean } {
-        const dailyPercent = this.tokenStats.todayUsage / this.tokenBudget.dailyLimit;
-        const monthlyPercent = this.tokenStats.monthUsage / this.tokenBudget.monthlyLimit;
-
-        return {
-            daily: this.tokenStats.todayUsage >= this.tokenBudget.dailyLimit,
-            monthly: this.tokenStats.monthUsage >= this.tokenBudget.monthlyLimit,
-            warning: dailyPercent >= this.tokenBudget.warningThreshold || monthlyPercent >= this.tokenBudget.warningThreshold
-        };
-    }
-
     calculateActualCost(inputTokens: number, outputTokens: number, provider: string): number {
         const costs = this.getProviderCosts();
         const providerCost = costs[provider];
@@ -421,14 +546,25 @@ class AIService {
     }
 
     updateSettings(settings: Partial<AISettings>) {
-        this.settings = { ...this.settings, ...settings };
-        if (typeof window !== 'undefined') {
-            localStorage.setItem('taleleaf:ai-settings', JSON.stringify(this.settings));
-        }
+        const next: AISettings = {
+            provider: settings.provider ?? this.settings.provider,
+            apiKeys: settings.apiKeys !== undefined ? { ...settings.apiKeys } : { ...this.settings.apiKeys },
+            storedApiKeys: settings.storedApiKeys !== undefined ? [...settings.storedApiKeys] : [...this.settings.storedApiKeys],
+            providerKeyMap: settings.providerKeyMap !== undefined ? { ...settings.providerKeyMap } : { ...this.settings.providerKeyMap }
+        };
+
+        this.settings = next;
+        this.ensureSettingsShape();
+        this.persistSettings();
     }
 
     getSettings(): AISettings {
-        return this.settings;
+        return {
+            ...this.settings,
+            apiKeys: { ...this.settings.apiKeys },
+            storedApiKeys: [...this.settings.storedApiKeys],
+            providerKeyMap: { ...this.settings.providerKeyMap }
+        };
     }
 
     async chat(messages: AIMessage[], contextText: string, options?: ChatOptions): Promise<string> {
@@ -437,27 +573,27 @@ class AIService {
             throw new Error('Invalid AI provider selected');
         }
 
+        let activeApiKey: string | null = null;
         // Check if API key is required but missing
-        if (provider.requiresApiKey && !this.settings.apiKeys[provider.id]) {
-            throw new Error(`API key required for ${provider.name}. Please configure it in settings.`);
+        if (provider.requiresApiKey) {
+            activeApiKey = this.getSelectedApiKeySecret(provider.id);
+            if (!activeApiKey) {
+                throw new Error(`API key required for ${provider.name}. Please configure it in settings.`);
+            }
         }
 
         switch (provider.id) {
             case 'openai-gpt4o-mini':
             case 'openai-gpt4o':
-                return this.chatWithOpenAI(messages, contextText, provider.id, options);
+                return this.chatWithOpenAI(messages, contextText, provider.id, activeApiKey!, options);
             case 'anthropic-claude':
-                return this.chatWithAnthropic(messages, contextText, options);
+                return this.chatWithAnthropic(messages, contextText, activeApiKey!, options);
             default:
                 throw new Error(`Provider ${provider.id} not implemented yet`);
         }
     }
 
-    private async chatWithOpenAI(messages: AIMessage[], contextText: string, model: string, options?: ChatOptions): Promise<string> {
-        const apiKey = this.settings.apiKeys['openai-gpt4o-mini'] || this.settings.apiKeys['openai-gpt4o'];
-        if (!apiKey) {
-            throw new Error('OpenAI API key not configured');
-        }
+    private async chatWithOpenAI(messages: AIMessage[], contextText: string, model: string, apiKey: string, options?: ChatOptions): Promise<string> {
 
         const modelName = model === 'openai-gpt4o' ? 'gpt-4o' : 'gpt-4o-mini';
 
@@ -515,11 +651,10 @@ class AIService {
 
             // Record actual token usage and update bucket
             if (result.usage) {
-                const cost = this.calculateActualCost(result.usage.prompt_tokens, result.usage.completion_tokens, this.settings.provider);
-                this.recordTokenUsage(result.usage.prompt_tokens, result.usage.completion_tokens, cost, 'chat');
-
                 // Update rate limit bucket with actual usage
                 this.updateTokenBucket(model, result.usage.total_tokens);
+
+                this.recordApiKeyUsage(model);
 
                 // Clear any previous rate limit info on successful request
                 this.rateLimitInfo = null;
@@ -532,11 +667,7 @@ class AIService {
         }
     }
 
-    private async chatWithAnthropic(messages: AIMessage[], contextText: string, options?: ChatOptions): Promise<string> {
-        const apiKey = this.settings.apiKeys['anthropic-claude'];
-        if (!apiKey) {
-            throw new Error('Anthropic API key not configured');
-        }
+    private async chatWithAnthropic(messages: AIMessage[], contextText: string, apiKey: string, options?: ChatOptions): Promise<string> {
 
         try {
             // Convert messages to Anthropic format
@@ -566,6 +697,7 @@ class AIService {
             }
 
             const result = await response.json();
+            this.recordApiKeyUsage('anthropic-claude');
             return result.content[0]?.text || 'Sorry, I could not generate a response.';
         } catch (error) {
             console.error('Anthropic error:', error);
@@ -686,14 +818,7 @@ Return ONLY a JSON array of objects with "name" and "notes" properties. Example:
 [{"name": "John Smith", "notes": "Protagonist, brave detective with a troubled past. Partner to Sarah."}]`;
 
         try {
-            const estimate = this.estimateRequestCost(contextText, prompt);
             const response = await this.chat([{ role: 'user', content: prompt }], contextText);
-
-            // If we didn't get actual usage from the API call, record the estimate
-            if (this.tokenStats.usageHistory.length === 0 ||
-                this.tokenStats.usageHistory[this.tokenStats.usageHistory.length - 1].action !== 'chat') {
-                this.recordTokenUsage(estimate.inputTokens, estimate.estimatedOutputTokens, estimate.estimatedCost, 'generate_characters');
-            }
 
             const jsonMatch = response.match(/\[[\s\S]*\]/);
             if (jsonMatch) {
