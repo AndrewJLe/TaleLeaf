@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { featureFlags } from "../constants/featureFlags";
 import { useAIGeneration } from "../hooks/useAIGeneration";
 import { useBookActions } from "../hooks/useBookActions";
 import { useBookPersistence } from "../hooks/useBookPersistenceNew";
 import { useBookTagGroups } from "../hooks/useBookTagGroups";
 import { useNormalizedChapters, useNormalizedCharacters, useNormalizedLocations, useNormalizedNotes } from "../hooks/useNormalizedEntities";
 import { AIMessage, aiService } from "../lib/ai-service";
-import { featureFlags } from "../constants/featureFlags";
 import { supabaseClient } from "../lib/supabase-client";
 import { BookEditorProps, TabType } from "../types/book";
 import ContextWindow from "./ContextWindow";
