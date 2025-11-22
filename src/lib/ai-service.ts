@@ -237,8 +237,8 @@ class AIService {
   getStoredApiKeys(providerId?: string): StoredApiKey[] {
     const list = providerId
       ? this.settings.storedApiKeys.filter(
-          (key) => key.providerId === providerId,
-        )
+        (key) => key.providerId === providerId,
+      )
       : this.settings.storedApiKeys;
 
     return list.map((key) => ({ ...key }));
