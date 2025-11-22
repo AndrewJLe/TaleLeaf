@@ -1,7 +1,7 @@
 # TaleLeaf
 
 ## Live Link
-https://tale-leaf.vercel.app/
+<a href="https://tale-leaf.vercel.app/" target="_blank">Live Site Here</a>
 
 TaleLeaf is a spoiler-safe reading companion that helps you turn raw narrative into structured understanding. It sits alongside your books and lets you capture characters, locations, chapters, and notes while using AI that stays strictly inside your current reading window.
 
