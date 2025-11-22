@@ -165,7 +165,6 @@ async function upsertTagsAndJoins(
   }));
   // Upsert base tags first
   for (const ti of normalized) {
-    let upErrWrap: any;
     const { error: upErr } = await supabase
       .from("book_tags")
       .upsert(

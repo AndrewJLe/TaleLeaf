@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { featureFlags, setFeatureFlag } from "../constants/featureFlags";
 
 export function FeatureFlagDebug() {
-  if (typeof window === "undefined" || process.env.NODE_ENV === "production") {
-    return null;
-  }
+  const isClient =
+    typeof window !== "undefined" && process.env.NODE_ENV !== "production";
 
   const [minimized, setMinimized] = useState<boolean>(() => {
+    if (!isClient) return false;
     try {
       return localStorage.getItem("ff.ui.minimized") === "1";
     } catch {
@@ -15,13 +15,16 @@ export function FeatureFlagDebug() {
   });
 
   useEffect(() => {
+    if (!isClient) return;
     try {
       if (minimized) localStorage.setItem("ff.ui.minimized", "1");
       else localStorage.removeItem("ff.ui.minimized");
     } catch {
       // ignore
     }
-  }, [minimized]);
+  }, [isClient, minimized]);
+
+  if (!isClient) return null;
 
   const flags = featureFlags as { debugAIChat: boolean };
 

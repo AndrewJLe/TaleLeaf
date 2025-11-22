@@ -14,7 +14,6 @@ import { BaseEntityCard, EntityCardConfig } from "./BaseEntityCard";
 
 interface NotesNormalizedSectionProps {
   notes: BookNote[];
-  currentWindowEnd: number;
   addNote: (
     note: Omit<BookNote, "id" | "createdAt" | "updatedAt" | "bookId">,
   ) => Promise<void> | void;
@@ -49,7 +48,6 @@ interface NoteEntityProxy {
 
 export const NotesNormalizedSection: React.FC<NotesNormalizedSectionProps> = ({
   notes,
-  currentWindowEnd,
   addNote,
   immediateUpdateNote,
   updateDraft,

@@ -15,7 +15,6 @@ function dispatch(evt: TelemetryEvent) {
     // For now just log (could enqueue to /api/telemetry)
     // Keep minimal PII: do not include free-form text bodies.
     if (process.env.NODE_ENV !== "production") {
-      // eslint-disable-next-line no-console
       console.debug("[telemetry]", evt.name, evt.props || {});
     }
     // Placeholder: network send could go here behind debounce

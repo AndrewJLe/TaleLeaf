@@ -71,7 +71,7 @@ export default function AuthCallbackPage() {
           </div>
         )}
         <p className="text-[10px] text-emerald-500">
-          You can close this tab if it doesn't redirect shortly.
+          You can close this tab if it doesn&rsquo;t redirect shortly.
         </p>
       </div>
     </div>

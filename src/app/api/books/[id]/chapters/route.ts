@@ -41,7 +41,7 @@ export async function GET(
   try {
     await ensureBookOwnership(supabase, bookId, user.id);
     // Actual schema columns: title, notes, summary, analysis, position
-    let chaptersRes = await supabase
+    const chaptersRes = await supabase
       .from("book_chapters")
       .select(
         "id,title,notes,summary,analysis,position,number,created_at,updated_at,deleted_at",
@@ -235,7 +235,7 @@ export async function POST(
       if (maxRow && typeof (maxRow as any).number === "number")
         nextNumber = (maxRow as any).number + 1;
       else nextNumber = 1;
-    } catch {}
+    } catch { }
     const insertBody: any = {
       book_id: bookId,
       title: payload.title,

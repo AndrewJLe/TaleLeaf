@@ -231,7 +231,7 @@ export function AuthPanel() {
             )}
             {mode === "signin" && (
               <div className="text-[11px] text-emerald-700/80">
-                Don't have an account?{" "}
+                Don&rsquo;t have an account?{" "}
                 <button
                   onClick={() => {
                     setMode("signup");

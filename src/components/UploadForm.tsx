@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { pdfStorage } from "../lib/pdf-storage";
 import { PDFUtils } from "../lib/pdf-utils";
@@ -148,7 +149,7 @@ export default function UploadForm({ onAdd }: Props) {
       // Clear input
       try {
         input.value = "";
-      } catch (_) {
+      } catch {
         /* ignore */
       }
     }
@@ -330,10 +331,13 @@ export default function UploadForm({ onAdd }: Props) {
             </label>
             <div className="flex items-center gap-4">
               {coverDataUrl && (
-                <img
+                <Image
                   src={coverDataUrl}
                   alt="Cover preview"
+                  width={64}
+                  height={80}
                   className="w-16 h-20 object-cover rounded-lg border border-emerald-200"
+                  unoptimized
                 />
               )}
               <input

@@ -23,7 +23,7 @@ async function jsonFetch<T>(
   options?: RequestInit,
   attempt = 1,
 ): Promise<T> {
-  let authHeaders: Record<string, string> = {};
+  const authHeaders: Record<string, string> = {};
   try {
     if (typeof window !== "undefined" && supabaseClient) {
       // Always refetch session (cheap) to reduce race with initial hydration
@@ -34,7 +34,6 @@ async function jsonFetch<T>(
       if (token) authHeaders.Authorization = `Bearer ${token}`;
     }
   } catch (e) {
-    // eslint-disable-next-line no-console
     console.warn("[jsonFetch] token retrieval failed", e);
   }
   const res = await fetch(url, {
@@ -59,7 +58,6 @@ async function jsonFetch<T>(
     const err = new Error(text || `Request failed ${res.status}`);
     // Attach status for caller diagnostics
     (err as any).status = res.status;
-    // eslint-disable-next-line no-console
     console.error("[jsonFetch error]", { url, status: res.status, body: text });
     throw err;
   }
@@ -90,7 +88,6 @@ export function useNormalizedCharacters(
             `/api/books/${bookId}/characters?debug=1`,
           );
           if (debug._debug) {
-            // eslint-disable-next-line no-console
             console.log("[useNormalizedCharacters debug]", debug._debug);
           }
         } catch {

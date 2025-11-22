@@ -164,8 +164,9 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
 
       // Clear draft and mark as clean
       setDrafts((prev) => {
-        const { [chapter.id]: _, ...rest } = prev;
-        return rest;
+        const next = { ...prev };
+        delete next[chapter.id];
+        return next;
       });
       setDirty((prev) => ({ ...prev, [chapter.id]: false }));
       setShowSavedStates((prev) => ({ ...prev, [chapter.id]: true }));
@@ -406,8 +407,9 @@ export const ChaptersSection: React.FC<ChaptersSectionProps> = ({
             onSave={handleSaveChapter}
             onCancel={(chapter) => {
               setDrafts((prev) => {
-                const { [chapter.id]: _, ...rest } = prev;
-                return rest;
+                const next = { ...prev };
+                delete next[chapter.id];
+                return next;
               });
               setDirty((prev) => ({ ...prev, [chapter.id]: false }));
             }}

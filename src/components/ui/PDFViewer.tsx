@@ -23,6 +23,7 @@ export default function PDFViewer({
 
   useEffect(() => {
     let mounted = true;
+    let createdUrl: string | null = null;
 
     const loadPDF = async () => {
       try {
@@ -34,6 +35,7 @@ export default function PDFViewer({
         if (!mounted) return;
 
         if (url) {
+          createdUrl = url;
           setBlobUrl(url);
         } else {
           setError("PDF not found. It may have been removed from storage.");
@@ -53,8 +55,8 @@ export default function PDFViewer({
 
     return () => {
       mounted = false;
-      if (blobUrl) {
-        URL.revokeObjectURL(blobUrl);
+      if (createdUrl) {
+        URL.revokeObjectURL(createdUrl);
       }
     };
   }, [uploadId]);

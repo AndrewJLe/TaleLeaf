@@ -30,7 +30,7 @@ export const ConfirmDeleteDialog: React.FC<ConfirmDeleteDialogProps> = ({
 
         <div className="mb-6">
           <p className="text-gray-700 mb-3">
-            Are you sure you want to delete <strong>"{bookTitle}"</strong>?
+            Are you sure you want to delete <strong>&ldquo;{bookTitle}&rdquo;</strong>?
           </p>
           <div className="bg-red-50 border border-red-200 rounded-lg p-3">
             <p className="text-sm text-red-800">

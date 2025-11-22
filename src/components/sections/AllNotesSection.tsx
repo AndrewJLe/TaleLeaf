@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { BookNote, Chapter, Character, Location } from "../../types/book";
 import { BookOpenIcon, MapPinIcon, NotebookIcon, UsersIcon } from "../ui/Icons";
 import { SaveStatus } from "../ui/SaveStatus";
@@ -204,6 +204,68 @@ export const AllNotesSection: React.FC<AllNotesSectionProps> = ({
   }, [dirtyCount, onUnsavedChangesUpdate]);
 
   // Parent triggers
+  const updateImmediate = useCallback(
+    async (
+      item: AggregatedItem,
+      patch: Partial<{ name: string; notes: string; tags: string[] }>,
+    ) => {
+      if (item.source === "character") {
+        await characters.update(item.id, {
+          name: patch.name,
+          notes: patch.notes,
+          tags: patch.tags,
+        } as Partial<Character>);
+      } else if (item.source === "chapter") {
+        await chapters.update(item.id, {
+          name: patch.name,
+          title: patch.name,
+          notes: patch.notes,
+          tags: patch.tags,
+        } as Partial<Chapter>);
+      } else if (item.source === "location") {
+        await locations.update(item.id, {
+          name: patch.name,
+          notes: patch.notes,
+          tags: patch.tags,
+        } as Partial<Location>);
+      } else {
+        await notes.update(item.id, {
+          title: patch.name,
+          body: patch.notes,
+          tags: patch.tags,
+        } as Partial<BookNote>);
+      }
+    },
+    [chapters, characters, locations, notes],
+  );
+
+  const handleSaveByKey = useCallback(
+    async (key: string) => {
+      if (!dirty[key]) return;
+      const item = aggregated.find((a) => a.key === key);
+      if (!item) return;
+      setSaving((prev) => ({ ...prev, [key]: true }));
+      setShowSaved((prev) => ({ ...prev, [key]: false }));
+      try {
+        await updateImmediate(item, { notes: drafts[key] });
+        setDrafts((prev) => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+        setDirty((prev) => ({ ...prev, [key]: false }));
+        setShowSaved((prev) => ({ ...prev, [key]: true }));
+        setTimeout(
+          () => setShowSaved((prev) => ({ ...prev, [key]: false })),
+          2000,
+        );
+      } finally {
+        setSaving((prev) => ({ ...prev, [key]: false }));
+      }
+    },
+    [aggregated, dirty, drafts, updateImmediate],
+  );
+
   useEffect(() => {
     if (onSaveAllRef)
       onSaveAllRef.current = async () => {
@@ -224,42 +286,10 @@ export const AllNotesSection: React.FC<AllNotesSectionProps> = ({
         });
         setDirty({});
       };
-  }, [dirty]);
+  }, [dirty, handleSaveByKey, onDiscardAllRef, onSaveAllRef]);
 
   const getDisplayValue = (item: AggregatedItem) =>
     drafts[item.key] ?? item.notes ?? "";
-
-  const updateImmediate = async (
-    item: AggregatedItem,
-    patch: Partial<{ name: string; notes: string; tags: string[] }>,
-  ) => {
-    if (item.source === "character") {
-      await characters.update(item.id, {
-        name: patch.name,
-        notes: patch.notes,
-        tags: patch.tags,
-      } as Partial<Character>);
-    } else if (item.source === "chapter") {
-      await chapters.update(item.id, {
-        name: patch.name,
-        title: patch.name,
-        notes: patch.notes,
-        tags: patch.tags,
-      } as Partial<Chapter>);
-    } else if (item.source === "location") {
-      await locations.update(item.id, {
-        name: patch.name,
-        notes: patch.notes,
-        tags: patch.tags,
-      } as Partial<Location>);
-    } else {
-      await notes.update(item.id, {
-        title: patch.name,
-        body: patch.notes,
-        tags: patch.tags,
-      } as Partial<BookNote>);
-    }
-  };
 
   const handleNotesChange = (item: AggregatedItem, value: string) => {
     setDrafts((prev) => ({ ...prev, [item.key]: value }));
@@ -269,29 +299,6 @@ export const AllNotesSection: React.FC<AllNotesSectionProps> = ({
   const handleSave = async (item: AggregatedItem) => {
     await handleSaveByKey(item.key);
   };
-  const handleSaveByKey = async (key: string) => {
-    if (!dirty[key]) return;
-    const item = aggregated.find((a) => a.key === key);
-    if (!item) return;
-    setSaving((prev) => ({ ...prev, [key]: true }));
-    setShowSaved((prev) => ({ ...prev, [key]: false }));
-    try {
-      await updateImmediate(item, { notes: drafts[key] });
-      setDrafts((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-      setDirty((prev) => ({ ...prev, [key]: false }));
-      setShowSaved((prev) => ({ ...prev, [key]: true }));
-      setTimeout(
-        () => setShowSaved((prev) => ({ ...prev, [key]: false })),
-        2000,
-      );
-    } finally {
-      setSaving((prev) => ({ ...prev, [key]: false }));
-    }
-  };
 
   const handleCancel = (item: AggregatedItem) => {
     setDrafts((prev) => {
@@ -300,30 +307,6 @@ export const AllNotesSection: React.FC<AllNotesSectionProps> = ({
       return next;
     });
     setDirty((prev) => ({ ...prev, [item.key]: false }));
-  };
-
-  // Tags add/remove and name changes via onUpdateEntity should persist immediately
-  const handleUpdateEntity = async (
-    _index: number,
-    entity: { id: string; name: string; notes: string; tags: string[] },
-  ) => {
-    const item = aggregated.find((a) =>
-      a.id === entity.id &&
-      a.name !== undefined &&
-      a.key.startsWith("character:")
-        ? true
-        : true,
-    );
-    // Determine source reliably: look up across sources in order of likelihood
-    let src: AggregatedItem | undefined = aggregated.find(
-      (a) =>
-        a.id === entity.id &&
-        entity.name === a.name &&
-        entity.notes === a.notes,
-    );
-    if (!src) src = aggregated.find((a) => a.id === entity.id);
-    if (!src) return;
-    await updateImmediate(src, { name: entity.name, tags: entity.tags });
   };
 
   const handleDelete = async (index: number) => {

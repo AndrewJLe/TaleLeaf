@@ -147,7 +147,7 @@ export function RateLimitsModal({ isOpen, onClose }: RateLimitsModalProps) {
                 <div className="mt-3 p-3 bg-red-100 rounded text-xs text-red-800">
                   <strong>Why so long?</strong> Your recent usage was very high.
                   Even if you stop making requests now, it will take time for
-                  old requests to expire from OpenAI's 60-second rolling window.
+                  old requests to expire from OpenAI&rsquo;s 60-second rolling window.
                 </div>
               </div>
             )}
@@ -164,11 +164,10 @@ export function RateLimitsModal({ isOpen, onClose }: RateLimitsModalProps) {
               return (
                 <div
                   key={provider.id}
-                  className={`border rounded-lg p-4 ${
-                    isRateLimited
+                  className={`border rounded-lg p-4 ${isRateLimited
                       ? "border-red-200 bg-red-50"
                       : "border-gray-200 bg-white"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div>

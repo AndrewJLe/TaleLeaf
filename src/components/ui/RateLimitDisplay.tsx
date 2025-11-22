@@ -88,11 +88,10 @@ export function RateLimitDisplay({
 
     return (
       <div
-        className={`inline-flex items-center gap-2 px-2 py-1 rounded-md border text-xs font-medium ${
-          isRateLimited
+        className={`inline-flex items-center gap-2 px-2 py-1 rounded-md border text-xs font-medium ${isRateLimited
             ? "text-red-600 bg-red-50 border-red-200"
             : getStatusColor(status.used, status.limit)
-        } ${className}`}
+          } ${className}`}
       >
         {isRateLimited ? (
           <div className="flex items-center gap-1">
@@ -166,7 +165,7 @@ export function RateLimitDisplay({
               window. Your recent usage is so high that even stopping
               completely, it will take{" "}
               {Math.round(rateLimitInfo.retryAfter / 3600)} hours for old
-              requests to "expire" from the window.
+              requests to &quot;expire&quot; from the window.
             </div>
           </div>
         )}

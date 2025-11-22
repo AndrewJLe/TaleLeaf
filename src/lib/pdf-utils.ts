@@ -161,7 +161,7 @@ export class PDFUtils {
       ];
 
       let maxCount = 1;
-      let foundCounts: number[] = [];
+      const foundCounts: number[] = [];
 
       for (const pattern of patterns) {
         const matches = [...text.matchAll(pattern)];

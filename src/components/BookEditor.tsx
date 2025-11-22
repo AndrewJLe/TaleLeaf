@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -57,13 +58,13 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
       const oldNotes = migratedBook.sections.notes;
       migratedBook.sections.notes = oldNotes
         ? [
-            {
-              id: crypto.randomUUID(),
-              name: "General Notes",
-              notes: oldNotes,
-              tags: [],
-            },
-          ]
+          {
+            id: crypto.randomUUID(),
+            name: "General Notes",
+            notes: oldNotes,
+            tags: [],
+          },
+        ]
         : [];
     }
     migratedBook.sections.characters = migratedBook.sections.characters.map(
@@ -133,8 +134,6 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
   const chaptersDiscardAllRef = useRef<(() => void) | null>(null);
   const locationsSaveAllRef = useRef<(() => Promise<void>) | null>(null);
   const locationsDiscardAllRef = useRef<(() => void) | null>(null);
-  const notesSaveAllRef = useRef<(() => Promise<void>) | null>(null);
-  const notesDiscardAllRef = useRef<(() => void) | null>(null);
 
   const {
     aiGenerationState,
@@ -142,7 +141,8 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     setIsAILoading,
     setGenerationLoading,
   } = useAIGeneration();
-  const contextWindowV2Enabled = !!supabaseClient;
+  const hasSupabaseClient = Boolean(supabaseClient);
+  const contextWindowV2Enabled = hasSupabaseClient;
   const [contextPrepStatus, setContextPrepStatus] = useState<
     "idle" | "indexing" | "ready" | "error"
   >("idle");
@@ -168,12 +168,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
   const normalizedLocations = useNormalizedLocations(local.id, true);
   const normalizedNotes = useNormalizedNotes(local.id, true);
 
-  const {
-    tags: tagMetadata,
-    groups: noteGroups,
-    upsertTag,
-    upsertGroup,
-  } = useBookTagGroups(local.id, true);
+  const { tags: tagMetadata, upsertTag } = useBookTagGroups(local.id, true);
   const tagColorMap = React.useMemo(() => {
     const m: Record<string, string> = {};
     tagMetadata.forEach((t) => {
@@ -191,30 +186,9 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
   } = useBookPersistence();
 
   const {
-    addCharacter,
-    updateCharacter,
-    batchUpdateCharacters,
-    deleteCharacter,
-    moveCharacter,
-    enhanceCharacter,
     generateCharacters,
-    addChapter,
-    updateChapter,
-    batchUpdateChapters,
-    deleteChapter,
-    moveChapter,
     generateChapterSummary,
-    addLocation,
-    updateLocation,
-    batchUpdateLocations,
-    deleteLocation,
-    moveLocation,
     generateLocations,
-    addNote: addBookNote,
-    updateNote: updateBookNote,
-    batchUpdateNotes,
-    deleteNote: deleteBookNote,
-    moveNote,
     generateNotes,
     updateBook,
   } = useBookActions(
@@ -253,13 +227,14 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     const upload = local.uploads?.[0];
     return upload?.pageCount || local.pages || 300;
   })();
+  const currentWindowStart = local.window?.start ?? 1;
+  const currentWindowEnd = local.window?.end ?? currentWindowStart;
   const handleContextWindowChange = (start: number, end: number) => {
     updateBook({ window: { start, end } });
   };
   useEffect(() => {
-    if (local.window && typeof local.window.start === "number")
-      setCurrentDocumentPage(local.window.start);
-  }, [local.window?.start]);
+    setCurrentDocumentPage(currentWindowStart);
+  }, [currentWindowStart]);
 
   const currentUpload = local.uploads?.[0];
   const currentPageText = currentUpload?.pages
@@ -284,8 +259,8 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
             question,
             window: {
               type: "pages",
-              start: local.window.start,
-              end: local.window.end,
+              start: currentWindowStart,
+              end: currentWindowEnd,
             },
             maxContextTokens: 1800,
           }),
@@ -314,22 +289,20 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         return null;
       }
     },
-    [contextWindowV2Enabled, local.id, local.window.start, local.window.end],
+    [contextWindowV2Enabled, currentWindowEnd, currentWindowStart, local.id],
   );
 
   const prepareChatPayload = useCallback(
     async (question: string) => {
       const trimmedQuestion = question.trim();
-      const windowStart = local.window?.start ?? 1;
-      const windowEnd = local.window?.end ?? windowStart;
       const localContextText = aiService.extractContextText(
         local,
-        windowStart,
-        windowEnd,
+        currentWindowStart,
+        currentWindowEnd,
       );
       let contextText = "";
       let systemPromptOverride: string | undefined;
-      let contextSourceDescription = `Local pages ${windowStart}-${windowEnd}`;
+      let contextSourceDescription = `Local pages ${currentWindowStart}-${currentWindowEnd}`;
 
       if (contextWindowV2Enabled) {
         const payload = await fetchContextWindowPayload(trimmedQuestion);
@@ -354,8 +327,8 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
       contextWindowV2Enabled,
       fetchContextWindowPayload,
       local,
-      local.window?.start,
-      local.window?.end,
+      currentWindowStart,
+      currentWindowEnd,
     ],
   );
 
@@ -419,7 +392,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
   }, [contextWindowV2Enabled, local.id, currentUpload?.pages]);
 
   useEffect(() => {
-    if (!contextWindowV2Enabled || !supabaseClient) {
+    if (!contextWindowV2Enabled || !hasSupabaseClient || !supabaseClient) {
       setHasReadinessChecked(true);
       return;
     }
@@ -429,7 +402,9 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
 
     (async () => {
       try {
-        const { count, error } = await supabaseClient
+        const client = supabaseClient;
+        if (!client) return;
+        const { count, error } = await client
           .from("book_page_chunks")
           .select("id", { head: true, count: "exact" })
           .eq("book_id", local.id);
@@ -462,7 +437,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     return () => {
       cancelled = true;
     };
-  }, [contextWindowV2Enabled, supabaseClient, local.id]);
+  }, [contextWindowV2Enabled, hasSupabaseClient, local.id]);
 
   const handleSendMessage = async () => {
     if (!message.trim() || isAILoading) return;
@@ -605,8 +580,9 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
 
       // Clear draft and mark as clean
       setNoteDrafts((prev) => {
-        const { [note.id]: _, ...rest } = prev;
-        return rest;
+        const next = { ...prev };
+        delete next[note.id];
+        return next;
       });
       setDirtyNotes((prev) => ({ ...prev, [note.id]: false }));
       setShowSavedNotesStates((prev) => ({ ...prev, [note.id]: true }));
@@ -649,7 +625,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
   const dirtyNotesCount = Object.values(dirtyNotes).filter(Boolean).length;
 
   // Save all dirty notes
-  const handleSaveAllNotes = async () => {
+  const handleSaveAllNotes = useCallback(async () => {
     const dirtyIds = Object.keys(dirtyNotes).filter((id) => dirtyNotes[id]);
     if (dirtyIds.length === 0) return;
 
@@ -718,10 +694,10 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         return newStates;
       });
     }
-  };
+  }, [dirtyNotes, noteDrafts, normalizedNotes]);
 
   // Discard all note changes
-  const handleDiscardAllNotes = () => {
+  const handleDiscardAllNotes = useCallback(() => {
     const dirtyIds = Object.keys(dirtyNotes).filter((id) => dirtyNotes[id]);
 
     // Clear all drafts and mark as clean
@@ -739,7 +715,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
       });
       return newDirty;
     });
-  };
+  }, [dirtyNotes]);
 
   // Tab save/discard handlers (after state variables are defined)
   const handleTabSaveChanges = useCallback(
@@ -776,27 +752,27 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
       lastRemoved?: any;
       undo?: () => Promise<boolean>;
     }[] = [
-      {
-        label: "Character",
-        lastRemoved: normalizedCharacters.lastRemoved,
-        undo: normalizedCharacters.undoRemove,
-      },
-      {
-        label: "Chapter",
-        lastRemoved: normalizedChapters.lastRemoved,
-        undo: normalizedChapters.undoRemove,
-      },
-      {
-        label: "Location",
-        lastRemoved: normalizedLocations.lastRemoved,
-        undo: normalizedLocations.undoRemove,
-      },
-      {
-        label: "Note",
-        lastRemoved: normalizedNotes.lastRemoved,
-        undo: normalizedNotes.undoRemove,
-      },
-    ];
+        {
+          label: "Character",
+          lastRemoved: normalizedCharacters.lastRemoved,
+          undo: normalizedCharacters.undoRemove,
+        },
+        {
+          label: "Chapter",
+          lastRemoved: normalizedChapters.lastRemoved,
+          undo: normalizedChapters.undoRemove,
+        },
+        {
+          label: "Location",
+          lastRemoved: normalizedLocations.lastRemoved,
+          undo: normalizedLocations.undoRemove,
+        },
+        {
+          label: "Note",
+          lastRemoved: normalizedNotes.lastRemoved,
+          undo: normalizedNotes.undoRemove,
+        },
+      ];
     for (const src of sources) {
       if (src.lastRemoved) {
         showToast({
@@ -816,6 +792,11 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     normalizedChapters.lastRemoved,
     normalizedLocations.lastRemoved,
     normalizedNotes.lastRemoved,
+    normalizedCharacters.undoRemove,
+    normalizedChapters.undoRemove,
+    normalizedLocations.undoRemove,
+    normalizedNotes.undoRemove,
+    showToast,
   ]);
 
   return (
@@ -858,10 +839,13 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
               </p>
             </div>
             {local.cover && (
-              <img
+              <Image
                 src={local.cover}
                 alt="Cover"
+                width={48}
+                height={64}
                 className="h-16 w-12 object-cover rounded shadow border"
+                unoptimized
               />
             )}
             <div className="flex items-center gap-2">
@@ -968,7 +952,7 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                     style={{
                                       width:
                                         contextProgress &&
-                                        contextProgress.total > 0
+                                          contextProgress.total > 0
                                           ? `${Math.min(100, Math.max(0, (contextProgress.processed / contextProgress.total) * 100))}%`
                                           : "20%",
                                     }}
@@ -1524,8 +1508,9 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                               onSave={handleSaveNote}
                               onCancel={(note) => {
                                 setNoteDrafts((prev) => {
-                                  const { [note.id]: _, ...rest } = prev;
-                                  return rest;
+                                  const next = { ...prev };
+                                  delete next[note.id];
+                                  return next;
                                 });
                                 setDirtyNotes((prev) => ({
                                   ...prev,
@@ -1559,9 +1544,9 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                   reorderedIds[sortedIndex],
                                   reorderedIds[swapIndex],
                                 ] = [
-                                  reorderedIds[swapIndex],
-                                  reorderedIds[sortedIndex],
-                                ];
+                                    reorderedIds[swapIndex],
+                                    reorderedIds[sortedIndex],
+                                  ];
                                 await normalizedNotes.reorder(
                                   reorderedIds.map((item) => item.id),
                                 );
@@ -1702,13 +1687,13 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
               pages = await pdfModule.PDFUtils.extractAllPageTexts(f, {
                 maxPages: pdfInfo.pageCount,
               });
-            } catch {}
+            } catch { }
             let indexedDBKey: string | undefined;
             const generatedId = crypto.randomUUID();
             try {
               await storageModule.pdfStorage.storePDF(generatedId, f.name, f);
               indexedDBKey = generatedId;
-            } catch {}
+            } catch { }
             const newUpload = {
               id: crypto.randomUUID(),
               filename: f.name,

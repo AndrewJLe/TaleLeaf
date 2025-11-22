@@ -42,7 +42,7 @@ export const DeleteBookButton: React.FC<DeleteBookButtonProps> = ({
           <h3 className="font-semibold text-red-900">Delete Book</h3>
         </div>
         <p className="text-red-700 text-sm mb-4">
-          Are you sure you want to delete "<strong>{bookTitle}</strong>"?
+          Are you sure you want to delete &ldquo;<strong>{bookTitle}</strong>&rdquo;?
         </p>
         <p className="text-red-600 text-xs mb-4">
           This will permanently remove all notes, characters, chapters,

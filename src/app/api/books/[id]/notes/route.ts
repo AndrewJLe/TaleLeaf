@@ -47,7 +47,7 @@ export async function GET(
       .order("created_at", { ascending: true });
     if (error) throw error;
     const noteIds = (data || []).map((n) => n.id);
-    let tagMap: Record<string, string[]> = {};
+    const tagMap: Record<string, string[]> = {};
     if (noteIds.length) {
       const { data: joinRows } = await supabase
         .from("book_note_tags")
@@ -60,7 +60,7 @@ export async function GET(
         if (!tagMap[r.note_id].includes(name)) tagMap[r.note_id].push(name);
       });
     }
-    const notes = (data || []).map((n, index) => {
+    const notes = (data || []).map((n) => {
       // Generate a stable default title based on position or ID if title is null
       const defaultTitle =
         n.position !== null && n.position !== undefined

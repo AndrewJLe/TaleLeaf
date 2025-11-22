@@ -394,7 +394,7 @@ export const useBookActions = (
     } finally {
       setGenerationLoading("notes", false);
     }
-  }, [book, setGenerationLoading, updateSections]);
+  }, [addNote, book, setGenerationLoading]);
 
   return {
     // Character actions

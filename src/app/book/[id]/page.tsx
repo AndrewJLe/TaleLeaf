@@ -89,7 +89,7 @@ export default function BookPage() {
             locations: locations || [],
             notes: notes || [],
           };
-          let uploads: any[] = [];
+          const uploads: any[] = [];
           if (bookRow.pdf_path) {
             try {
               await getSignedPDFUrl(bookRow.pdf_path, 60); // ensure path is valid
@@ -217,7 +217,7 @@ export default function BookPage() {
             Book not found
           </h2>
           <p className="text-emerald-700 mb-6">
-            The book you're looking for doesn't exist or may have been removed
+            The book you&rsquo;re looking for doesn&rsquo;t exist or may have been removed
             from your library.
           </p>
           <a

@@ -18,7 +18,8 @@ export interface PreprocessResult {
 
 // TODO: wire this to a real embeddings provider (OpenAI, etc.). For now this
 // returns null so retrieval falls back to heuristic scoring.
-async function computeEmbedding(_text: string): Promise<number[] | null> {
+async function computeEmbedding(text: string): Promise<number[] | null> {
+  void text;
   return null;
 }
 

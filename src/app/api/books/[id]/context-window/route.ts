@@ -44,10 +44,10 @@ export async function POST(
   const selection: WindowSelection = payload.window?.type
     ? payload.window
     : {
-        type: "pages",
-        start: payload.window?.start ?? payload.start ?? 1,
-        end: payload.window?.end ?? payload.end ?? 1,
-      };
+      type: "pages",
+      start: payload.window?.start ?? payload.start ?? 1,
+      end: payload.window?.end ?? payload.end ?? 1,
+    };
 
   // Best-effort extraction of an explicit page reference from the user's question.
   const explicitPage = extractExplicitPageFromQuestion(question);
@@ -72,7 +72,7 @@ export async function POST(
         selection,
         question,
       });
-    } catch (_) {
+    } catch {
       // ignore logging errors
     }
 
@@ -86,7 +86,7 @@ export async function POST(
         question,
         explicitPage,
       });
-    } catch (_) {
+    } catch {
       // ignore logging errors
     }
 

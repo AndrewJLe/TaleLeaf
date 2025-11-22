@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 
 type Book = {
@@ -12,7 +13,6 @@ type Book = {
 interface BookListProps {
   books: any[];
   selectedId?: string | null;
-  onSelect?: (id: string) => void;
   onDelete: (id: string, title: string) => void;
   remoteIds?: Set<string>;
   unsyncedIds?: Set<string>;
@@ -21,7 +21,6 @@ interface BookListProps {
 export default function BookList({
   books,
   selectedId,
-  onSelect,
   onDelete,
   remoteIds,
   unsyncedIds,
@@ -56,10 +55,13 @@ export default function BookList({
                 {/* Book Cover or Placeholder */}
                 <div className="w-full h-32 bg-gradient-to-br from-emerald-100 to-emerald-200 rounded-lg mb-4 flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
                   {book.cover ? (
-                    <img
+                    <Image
                       src={book.cover}
                       alt={book.title}
+                      width={400}
+                      height={200}
                       className="w-full h-full object-cover rounded-lg"
+                      unoptimized
                     />
                   ) : (
                     <span className="text-3xl text-emerald-600">📖</span>

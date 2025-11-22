@@ -146,8 +146,9 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
 
       // Clear draft and mark as clean
       setDrafts((prev) => {
-        const { [location.id]: _, ...rest } = prev;
-        return rest;
+        const next = { ...prev };
+        delete next[location.id];
+        return next;
       });
       setDirty((prev) => ({ ...prev, [location.id]: false }));
       setShowSavedStates((prev) => ({ ...prev, [location.id]: true }));
@@ -164,7 +165,7 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
   };
 
   // Save all dirty locations
-  const handleSaveAll = async () => {
+  const handleSaveAll = React.useCallback(async () => {
     const dirtyIds = Object.keys(dirty).filter((id) => dirty[id]);
     if (dirtyIds.length === 0) return;
 
@@ -253,7 +254,7 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
         return newStates;
       });
     }
-  };
+  }, [dirty, drafts, locationMap, locations, onBatchUpdateLocations, onUpdateLocation]);
 
   // Discard all changes
   const handleDiscardAll = () => {
@@ -384,8 +385,9 @@ export const LocationsSection: React.FC<LocationsSectionProps> = ({
             onSave={handleSaveLocation}
             onCancel={(location) => {
               setDrafts((prev) => {
-                const { [location.id]: _, ...rest } = prev;
-                return rest;
+                const next = { ...prev };
+                delete next[location.id];
+                return next;
               });
               setDirty((prev) => ({ ...prev, [location.id]: false }));
             }}

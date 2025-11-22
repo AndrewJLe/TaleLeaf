@@ -93,7 +93,7 @@ export default function ProfilePage() {
     try {
       const sanitized = sanitizeBooksArrayForLocalStorage(books);
       localStorage.setItem("taleleaf:books", JSON.stringify(sanitized));
-    } catch (e) {
+    } catch {
       // Fallback: attempt to save raw books if sanitization unexpectedly fails
       try {
         localStorage.setItem("taleleaf:books", JSON.stringify(books));
@@ -267,11 +267,10 @@ export default function ProfilePage() {
           <div className="flex items-center gap-3">
             {isSupabaseEnabled && <AuthPanel />}
             <button
-              className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 border ${
-                showUploader
+              className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 border ${showUploader
                   ? "bg-amber-600 text-white border-amber-600 hover:bg-amber-700"
                   : "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700"
-              } hover:scale-105 shadow-md hover:shadow-lg flex items-center gap-2`}
+                } hover:scale-105 shadow-md hover:shadow-lg flex items-center gap-2`}
               onClick={() => setShowUploader((s) => !s)}
             >
               <span className="text-lg">{showUploader ? "✖️" : "📚"}</span>
@@ -496,7 +495,6 @@ export default function ProfilePage() {
             <BookList
               books={mergedBooks}
               selectedId={null}
-              onSelect={() => {}}
               onDelete={handleDeleteBook}
               remoteIds={remoteIds}
               unsyncedIds={unsyncedIds}

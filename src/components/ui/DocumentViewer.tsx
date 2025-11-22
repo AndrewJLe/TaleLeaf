@@ -60,82 +60,67 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const currentPageContent = getCurrentPageContent();
   const totalPages = upload?.pageCount || 0;
 
-  // Determine document type for display
-  const getDocumentTypeDisplay = () => {
-    if (!upload) return "Document";
-    return upload.type === "pdf" ? "PDF Document" : "Text Document";
-  };
-
-  const getDocumentIcon = () => {
-    if (!upload) return <FileTextIcon size={16} className="text-amber-700" />;
-    return upload.type === "pdf" ? (
-      <span className="text-red-600 text-sm font-bold">PDF</span>
-    ) : (
-      <FileTextIcon size={16} className="text-amber-700" />
-    );
-  };
-
   return (
     <div className="flex flex-col h-full bg-white relative">
       {/* Only show compact header for file selection and page navigation when needed */}
       {(book.uploads.length > 1 ||
         (totalPages > 1 && upload?.type === "text")) && (
-        <div className="flex-shrink-0 px-3 py-1 border-b border-gray-200 bg-gray-50">
-          <div className="flex items-center justify-between">
-            {book.uploads.length > 1 && (
-              <select
-                value={selectedUpload}
-                onChange={(e) => setSelectedUpload(Number(e.target.value))}
-                className="px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-emerald-400 focus:border-transparent bg-white"
-              >
-                {book.uploads.map((upload, index) => (
-                  <option key={index} value={index}>
-                    {upload.filename}
-                  </option>
-                ))}
-              </select>
-            )}
+          <div className="flex-shrink-0 px-3 py-1 border-b border-gray-200 bg-gray-50">
+            <div className="flex items-center justify-between">
+              {book.uploads.length > 1 && (
+                <select
+                  value={selectedUpload}
+                  onChange={(e) => setSelectedUpload(Number(e.target.value))}
+                  className="px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-emerald-400 focus:border-transparent bg-white"
+                >
+                  {book.uploads.map((upload, index) => (
+                    <option key={index} value={index}>
+                      {upload.filename}
+                    </option>
+                  ))}
+                </select>
+              )}
 
-            {/* Compact Page Navigation - only for text content */}
-            {totalPages > 1 && upload?.type === "text" && (
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => onPageChange?.(Math.max(1, currentPage - 1))}
-                  disabled={currentPage <= 1}
-                  className="px-2 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  ←
-                </button>
-                <span className="text-xs text-gray-600 mx-1">
-                  {currentPage} / {totalPages}
-                </span>
-                <button
-                  onClick={() =>
-                    onPageChange?.(Math.min(totalPages, currentPage + 1))
-                  }
-                  disabled={currentPage >= totalPages}
-                  className="px-2 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  →
-                </button>
-                <input
-                  type="number"
-                  min={1}
-                  max={totalPages}
-                  value={currentPage}
-                  onChange={(e) => {
-                    const page = parseInt(e.target.value);
-                    if (page >= 1 && page <= totalPages && onPageChange) {
-                      onPageChange(page);
+              {/* Compact Page Navigation - only for text content */}
+              {totalPages > 1 && upload?.type === "text" && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => onPageChange?.(Math.max(1, currentPage - 1))}
+                    disabled={currentPage <= 1}
+                    className="px-2 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    ←
+                  </button>
+                  <span className="text-xs text-gray-600 mx-1">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() =>
+                      onPageChange?.(Math.min(totalPages, currentPage + 1))
                     }
-                  }}
-                  className="w-10 px-1 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-emerald-400 focus:border-transparent text-center ml-1"
-                />
-              </div>
-            )}
+                    disabled={currentPage >= totalPages}
+                    className="px-2 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    →
+                  </button>
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={currentPage}
+                    onChange={(e) => {
+                      const page = parseInt(e.target.value);
+                      if (page >= 1 && page <= totalPages && onPageChange) {
+                        onPageChange(page);
+                      }
+                    }}
+                    className="w-10 px-1 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-emerald-400 focus:border-transparent text-center ml-1"
+                  />
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Document Content - Grid container provides full height */}
       <div className="flex-1 min-h-0 overflow-hidden">

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   AI_PROVIDERS,
@@ -219,8 +220,8 @@ export function SettingsModal({
 
   const keysForSelectedProvider = selectedProvider
     ? settings.storedApiKeys.filter(
-        (key) => key.providerId === selectedProvider.id,
-      )
+      (key) => key.providerId === selectedProvider.id,
+    )
     : [];
 
   if (!isOpen) return null;
@@ -641,10 +642,13 @@ export function SettingsModal({
                   <h4 className="text-xs font-semibold text-emerald-800 mb-2">
                     Current Cover
                   </h4>
-                  <img
+                  <Image
                     src={book.cover}
                     alt="Cover"
+                    width={160}
+                    height={240}
                     className="h-40 rounded border shadow"
+                    unoptimized
                   />
                 </div>
               )}

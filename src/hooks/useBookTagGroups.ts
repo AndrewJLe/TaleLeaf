@@ -146,28 +146,28 @@ export function useBookTagGroups(
             ...prev,
             row
               ? {
-                  id: row.id,
-                  bookId: row.book_id,
-                  name: row.name,
-                  color: row.color,
-                  createdAt: row.created_at,
-                  updatedAt: row.updated_at,
-                }
+                id: row.id,
+                bookId: row.book_id,
+                name: row.name,
+                color: row.color,
+                createdAt: row.created_at,
+                updatedAt: row.updated_at,
+              }
               : {
-                  id: crypto.randomUUID(),
-                  bookId,
-                  name: normalized,
-                  color,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                },
+                id: crypto.randomUUID(),
+                bookId,
+                name: normalized,
+                color,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              },
           ];
         });
       } catch (e: any) {
         setError(e.message || "Failed to upsert tag");
       }
     },
-    [bookId, enabled, fetchAll],
+    [bookId, enabled],
   );
 
   const deleteTag = useCallback(

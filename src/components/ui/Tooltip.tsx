@@ -20,7 +20,7 @@ export const Tooltip: React.FC<TooltipProps> = ({ text, children, id }) => {
 
     let left = anchorRect.left + anchorRect.width / 2;
     let top = anchorRect.top - (bubbleRect ? bubbleRect.height + padding : 24);
-    let transform = "translateX(-50%)";
+    const transform = "translateX(-50%)";
 
     // If there's not enough space above, flip below
     if (top < padding) {
