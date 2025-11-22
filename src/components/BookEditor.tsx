@@ -9,6 +9,7 @@ import { useBookPersistence } from "../hooks/useBookPersistenceNew";
 import { useBookTagGroups } from "../hooks/useBookTagGroups";
 import { useNormalizedChapters, useNormalizedCharacters, useNormalizedLocations, useNormalizedNotes } from "../hooks/useNormalizedEntities";
 import { AIMessage, aiService } from "../lib/ai-service";
+import { featureFlags } from "../constants/featureFlags";
 import { supabaseClient } from "../lib/supabase-client";
 import { BookEditorProps, TabType } from "../types/book";
 import ContextWindow from "./ContextWindow";
@@ -29,6 +30,13 @@ import { TabNavigation } from "./ui/TabNavigation";
 import { Toast, useToast } from "./ui/Toast";
 import { Tooltip } from "./ui/Tooltip";
 
+type DebugPreviewPayload = {
+    systemPrompt: string;
+    messages: AIMessage[];
+    contextSource: string;
+    contextSnippet?: string;
+};
+
 export default function BookEditor({ book, onUpdate }: BookEditorProps) {
     const [local, setLocal] = useState(() => {
         const migratedBook = { ...book };
@@ -47,6 +55,10 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
 
     const [message, setMessage] = useState("");
     const [chat, setChat] = useState<AIMessage[]>([]);
+    const debugModeEnabled = featureFlags.debugAIChat;
+    const [debugPreviewPayload, setDebugPreviewPayload] = useState<DebugPreviewPayload | null>(null);
+    const [isDebugPreviewLoading, setIsDebugPreviewLoading] = useState(false);
+    const [debugPreviewError, setDebugPreviewError] = useState<string | null>(null);
     const [isEditingPageText, setIsEditingPageText] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const searchParams = useSearchParams();
@@ -149,6 +161,35 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         }
     }, [contextWindowV2Enabled, local.id, local.window.start, local.window.end]);
 
+    const prepareChatPayload = useCallback(async (question: string) => {
+        const trimmedQuestion = question.trim();
+        const windowStart = local.window?.start ?? 1;
+        const windowEnd = local.window?.end ?? windowStart;
+        const localContextText = aiService.extractContextText(local, windowStart, windowEnd);
+        let contextText = '';
+        let systemPromptOverride: string | undefined;
+        let contextSourceDescription = `Local pages ${windowStart}-${windowEnd}`;
+
+        if (contextWindowV2Enabled) {
+            const payload = await fetchContextWindowPayload(trimmedQuestion);
+            if (payload?.result?.systemPrompt) {
+                systemPromptOverride = payload.result.systemPrompt;
+                contextSourceDescription = 'Context window system prompt';
+            } else {
+                contextText = localContextText;
+            }
+        } else {
+            contextText = localContextText;
+        }
+
+        return {
+            systemPromptOverride,
+            contextText,
+            contextSourceDescription,
+            contextSnippet: localContextText
+        };
+    }, [contextWindowV2Enabled, fetchContextWindowPayload, local, local.window?.start, local.window?.end]);
+
     const triggerContextPreprocess = useCallback(async () => {
         if (!contextWindowV2Enabled || !supabaseClient) return;
         try {
@@ -245,26 +286,39 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
         const newChat = [...chat, userMessage];
         setChat(newChat); setMessage(''); setIsAILoading(true);
         try {
-            let systemPromptOverride: string | undefined;
-            let contextText = '';
-            if (contextWindowV2Enabled) {
-                const payload = await fetchContextWindowPayload(trimmed);
-                if (payload?.result?.systemPrompt) {
-                    systemPromptOverride = payload.result.systemPrompt;
-                } else {
-                    contextText = aiService.extractContextText(local, local.window.start, local.window.end);
-                }
-            } else {
-                contextText = aiService.extractContextText(local, local.window.start, local.window.end);
-            }
-
-            const response = await aiService.chat(newChat, contextText, { systemPromptOverride });
+            const payload = await prepareChatPayload(trimmed);
+            const response = await aiService.chat(newChat, payload.contextText, { systemPromptOverride: payload.systemPromptOverride });
             setChat([...newChat, { role: 'assistant', content: response }]);
         } catch (error) {
             console.error('AI chat error', error);
             setChat([...newChat, { role: 'assistant', content: 'Sorry, I encountered an error. Please check your AI settings and try again.' }]);
         } finally {
             setIsAILoading(false);
+        }
+    };
+
+    const handlePreviewClick = async () => {
+        if (!message.trim() || isDebugPreviewLoading) return;
+        setDebugPreviewError(null);
+        setIsDebugPreviewLoading(true);
+        try {
+            const trimmed = message.trim();
+            const payload = await prepareChatPayload(trimmed);
+            const fallbackContext = payload.contextText || payload.contextSnippet || '';
+            const systemPrompt = payload.systemPromptOverride ?? aiService.getSystemPrompt(fallbackContext);
+            const previewMessages: AIMessage[] = [{ role: 'system', content: systemPrompt }, ...chat, { role: 'user', content: trimmed }];
+            const contextSnippet = payload.contextSnippet && payload.contextSnippet.length > 1600 ? `${payload.contextSnippet.slice(0, 1600)}…` : payload.contextSnippet;
+            setDebugPreviewPayload({
+                systemPrompt,
+                messages: previewMessages,
+                contextSource: payload.contextSourceDescription,
+                contextSnippet: contextSnippet
+            });
+        } catch (error) {
+            console.error('Failed to build AI preview', error);
+            setDebugPreviewError('Unable to build preview. Try again.');
+        } finally {
+            setIsDebugPreviewLoading(false);
         }
     };
 
@@ -594,9 +648,50 @@ export default function BookEditor({ book, onUpdate }: BookEditorProps) {
                                                 </div>
                                             ))}
                                         </div>
-                                        <div className="flex gap-3 mt-2">
-                                            <input type="text" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Ask about characters, plot, themes..." className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-400 focus:border-transparent bg-white" onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()} disabled={isAILoading} />
-                                            <Button onClick={handleSendMessage} disabled={!message.trim() || isAILoading} isLoading={isAILoading} variant="primary" className="bg-emerald-700 hover:bg-emerald-800">Send</Button>
+                                        <div className="flex flex-col gap-3 mt-2">
+                                            <div className="flex gap-3">
+                                                <input type="text" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Ask about characters, plot, themes..." className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-400 focus:border-transparent bg-white" onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()} disabled={isAILoading} />
+                                                {debugModeEnabled ? (
+                                                    <div className="flex flex-col gap-2">
+                                                        <Button onClick={handlePreviewClick} disabled={!message.trim() || isDebugPreviewLoading} isLoading={isDebugPreviewLoading} variant="primary" className="text-[11px] font-semibold">Preview AI prompt</Button>
+                                                        <Button onClick={handleSendMessage} disabled={!message.trim() || isAILoading} isLoading={isAILoading} variant="secondary" className="text-[11px] font-semibold border-emerald-300 text-emerald-700">Send</Button>
+                                                    </div>
+                                                ) : (
+                                                    <Button onClick={handleSendMessage} disabled={!message.trim() || isAILoading} isLoading={isAILoading} variant="primary" className="bg-emerald-700 hover:bg-emerald-800">Send</Button>
+                                                )}
+                                            </div>
+                                            {debugModeEnabled && (
+                                                <div className="space-y-2">
+                                                    {debugPreviewError && <div className="text-[11px] text-rose-600">{debugPreviewError}</div>}
+                                                    {debugPreviewPayload && (
+                                                        <div className="rounded-xl border border-emerald-100 bg-emerald-50/80 p-3 text-xs space-y-3">
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <div>
+                                                                    <p className="text-[12px] font-semibold text-slate-900">AI request preview</p>
+                                                                    <p className="text-[10px] text-slate-500">{debugPreviewPayload.contextSource}</p>
+                                                                </div>
+                                                                <button type="button" onClick={() => setDebugPreviewPayload(null)} className="text-[10px] text-slate-500 hover:text-slate-700">Hide</button>
+                                                            </div>
+                                                            <div className="space-y-2">
+                                                                <div>
+                                                                    <p className="text-[10px] font-semibold text-slate-500">System prompt</p>
+                                                                    <pre className="whitespace-pre-wrap max-h-48 overflow-y-auto rounded-md border border-slate-200 bg-white/90 p-2 leading-snug text-[11px] text-slate-900">{debugPreviewPayload.systemPrompt}</pre>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-[10px] font-semibold text-slate-500">Messages</p>
+                                                                    <pre className="max-h-48 overflow-y-auto rounded-md border border-slate-200 bg-white/90 p-2 text-[10px] leading-snug text-slate-900">{JSON.stringify(debugPreviewPayload.messages, null, 2)}</pre>
+                                                                </div>
+                                                                {debugPreviewPayload.contextSnippet && (
+                                                                    <div>
+                                                                        <p className="text-[10px] font-semibold text-slate-500">Context snippet</p>
+                                                                        <pre className="whitespace-pre-wrap max-h-48 overflow-y-auto rounded-md border border-slate-200 bg-white/90 p-2 text-[10px] leading-snug text-slate-900">{debugPreviewPayload.contextSnippet}</pre>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     </>
                                 )}

@@ -802,6 +802,10 @@ Guidelines:
 - Provide detailed analysis when possible using available context`;
     }
 
+    getSystemPrompt(contextText: string): string {
+        return this.buildSystemPrompt(contextText);
+    }
+
     estimateContextTokens(book: any, windowStart: number, windowEnd: number): number {
         const contextText = this.extractContextText(book, windowStart, windowEnd);
         return this.estimateTokens(contextText);
