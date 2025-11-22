@@ -78,7 +78,11 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./out
+          # With static_site_generator: next, Pages will infer the correct
+          # static output from the Next.js build. We upload the repository
+          # root instead of an explicit ./out folder (which is only used by
+          # next export).
+          path: .
 
   # Deployment job
   deploy:
