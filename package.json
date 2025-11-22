@@ -5,8 +5,11 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
+    "export": "next build --turbopack && next export",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "format": "npx prettier --write .",
+    "deploy:gh-pages": "echo 'This repo uses a GitHub Action to publish the exported site to the gh-pages branch.'"
   },
   "dependencies": {
     "lucide-react": "^0.460.0",

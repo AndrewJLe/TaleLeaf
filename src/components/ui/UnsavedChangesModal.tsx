@@ -1,5 +1,5 @@
-import React from 'react';
-import { Button } from './Button';
+import React from "react";
+import { Button } from "./Button";
 
 interface UnsavedChangesModalProps {
   isOpen: boolean;
@@ -14,7 +14,7 @@ export const UnsavedChangesModal: React.FC<UnsavedChangesModalProps> = ({
   onSaveAndContinue,
   onDiscardAndContinue,
   onStay,
-  unsavedCount
+  unsavedCount,
 }) => {
   if (!isOpen) return null;
 
@@ -26,7 +26,7 @@ export const UnsavedChangesModal: React.FC<UnsavedChangesModalProps> = ({
         </h3>
 
         <p className="text-gray-600 mb-6">
-          You have {unsavedCount} unsaved note{unsavedCount !== 1 ? 's' : ''}.
+          You have {unsavedCount} unsaved note{unsavedCount !== 1 ? "s" : ""}.
           What would you like to do with your changes?
         </p>
 
@@ -47,11 +47,7 @@ export const UnsavedChangesModal: React.FC<UnsavedChangesModalProps> = ({
             Discard Changes
           </Button>
 
-          <Button
-            onClick={onStay}
-            variant="secondary"
-            className="w-full"
-          >
+          <Button onClick={onStay} variant="secondary" className="w-full">
             Stay on Notes
           </Button>
         </div>

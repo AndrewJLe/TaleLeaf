@@ -3,9 +3,9 @@
  * This keeps PDFs out of localStorage to avoid quota issues
  */
 
-const DB_NAME = 'taleleaf-pdfs';
+const DB_NAME = "taleleaf-pdfs";
 const DB_VERSION = 1;
-const STORE_NAME = 'pdf-files';
+const STORE_NAME = "pdf-files";
 
 interface PDFStorageItem {
   id: string;
@@ -30,8 +30,8 @@ class PDFStorage {
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
         if (!db.objectStoreNames.contains(STORE_NAME)) {
-          const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-          store.createIndex('filename', 'filename', { unique: false });
+          const store = db.createObjectStore(STORE_NAME, { keyPath: "id" });
+          store.createIndex("filename", "filename", { unique: false });
         }
       };
     });
@@ -41,14 +41,14 @@ class PDFStorage {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([STORE_NAME], 'readwrite');
+      const transaction = this.db!.transaction([STORE_NAME], "readwrite");
       const store = transaction.objectStore(STORE_NAME);
 
       const item: PDFStorageItem = {
         id,
         filename,
         blob,
-        uploadedAt: Date.now()
+        uploadedAt: Date.now(),
       };
 
       const request = store.put(item);
@@ -61,7 +61,7 @@ class PDFStorage {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([STORE_NAME], 'readonly');
+      const transaction = this.db!.transaction([STORE_NAME], "readonly");
       const store = transaction.objectStore(STORE_NAME);
 
       const request = store.get(id);
@@ -77,7 +77,7 @@ class PDFStorage {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([STORE_NAME], 'readwrite');
+      const transaction = this.db!.transaction([STORE_NAME], "readwrite");
       const store = transaction.objectStore(STORE_NAME);
 
       const request = store.delete(id);
@@ -90,7 +90,7 @@ class PDFStorage {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([STORE_NAME], 'readonly');
+      const transaction = this.db!.transaction([STORE_NAME], "readonly");
       const store = transaction.objectStore(STORE_NAME);
 
       const request = store.getAll();

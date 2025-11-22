@@ -1,8 +1,8 @@
-import { TokenEstimate } from './ai-service';
+import { TokenEstimate } from "./ai-service";
 
 export type WindowSelection =
-  | { type: 'pages'; start: number; end: number }
-  | { type: 'chapters'; chapterIndices: number[] };
+  | { type: "pages"; start: number; end: number }
+  | { type: "chapters"; chapterIndices: number[] };
 
 export interface RetrievalWindow {
   startPage: number;
@@ -25,7 +25,7 @@ export interface Citation {
 }
 
 export interface ContextPart {
-  label: 'chapter-summary' | 'page-summary' | 'paragraph';
+  label: "chapter-summary" | "page-summary" | "paragraph";
   page?: number;
   chapterIndex?: number;
   text: string;
@@ -45,7 +45,7 @@ export interface RetrievalResult {
 export interface SummaryJson {
   entities: Array<{
     name: string;
-    type: 'character' | 'location' | 'object' | 'group' | 'concept';
+    type: "character" | "location" | "object" | "group" | "concept";
     mentions: number;
     page_spans: number[];
   }>;

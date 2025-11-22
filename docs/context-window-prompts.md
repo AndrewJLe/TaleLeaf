@@ -39,6 +39,7 @@ Each summary JSON must follow this structure:
 ```
 
 Rules:
+
 - Include only information explicitly supported by the supplied text (no speculation).
 - Always cite page numbers inside `page_spans` or `evidence_pages`.
 - Keep each field concise; total content per object should stay within the assigned token budget.
@@ -48,11 +49,13 @@ Rules:
 ### Paragraph → JSON Summary
 
 System:
+
 ```
 You are TaleLeaf's assistant. You ONLY know the provided paragraph from pages {page}. You must not speculate about future plot events or use any knowledge beyond the supplied text. Return STRICT JSON matching the schema: entities[], events[], relationships[], facts[], open_questions[].
 ```
 
 User:
+
 ```
 Paragraph (p{page}.{intra}): """{text}"""
 Requirements:
@@ -66,11 +69,13 @@ Return only JSON. No markdown.
 ### Page Roll-up (Paragraph JSON → Page JSON)
 
 System:
+
 ```
 You are compressing multiple paragraph JSON payloads into a concise page summary JSON for page {page}. No spoilers beyond this page. Strictly aggregate and deduplicate entities/events/relationships/facts. Keep total ≤ 120 tokens when rendered. Return STRICT JSON.
 ```
 
 User:
+
 ```
 Paragraph JSON payloads for page {page}:
 {json_array}
@@ -79,11 +84,13 @@ Paragraph JSON payloads for page {page}:
 ### Chapter Roll-up (Page JSON → Chapter JSON)
 
 System:
+
 ```
 You are compressing multiple page JSON payloads into a concise chapter summary JSON for chapter {chapter_index}. Include only content from pages {start_page}–{end_page}. Keep total ≤ 300 tokens when rendered. Return STRICT JSON.
 ```
 
 User:
+
 ```
 Page JSON payloads for chapter {chapter_index}:
 {json_array}
@@ -92,11 +99,13 @@ Page JSON payloads for chapter {chapter_index}:
 ### Runtime Answer Prompt
 
 System:
+
 ```
 You are TaleLeaf's assistant. You ONLY know content from pages {start}–{end} of this book. Do NOT reveal, speculate about, or reference events beyond page {end}. If the question asks for content beyond this range, explain it is outside the current reading window. Cite the page number(s) for each factual statement. Keep the answer concise.
 ```
 
 User:
+
 ```
 Question: "{question}"
 Context:
@@ -114,6 +123,7 @@ Instructions:
 ```
 
 ## Citation Validation
+
 - Every `ContextPart` must track the pages it references.
 - The retrieval orchestrator validates that cited pages fall within the selected window before dispatching the final prompt.
 - If a response cites a page outside the window, reject the answer and ask the model to restate using the allowed range only.

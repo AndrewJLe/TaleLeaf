@@ -39,6 +39,7 @@ This document defines the rules, responsibilities, and workflows for all agents 
 ---
 
 ## Project Structure Overview
+
 /src
 /app → Next.js routes and server components
 /components → UI components only
@@ -46,16 +47,15 @@ This document defines the rules, responsibilities, and workflows for all agents 
 /lib → Supabase utilities, shared logic, config helpers
 /constants → Shared constants and application-wide values
 
-
 ---
 
 ## Agent Responsibilities
 
-| Agent     | Responsibilities                                                                 |
-|-----------|----------------------------------------------------------------------------------|
-| Planner   | Breaks tasks into steps, clarifies requirements, and confirms user intent.       |
-| Builder   | Implements components, hooks, utilities, and requested features.                 |
-| Reviewer  | Audits generated code for accuracy, quality, safety, and guideline compliance.   |
+| Agent    | Responsibilities                                                               |
+| -------- | ------------------------------------------------------------------------------ |
+| Planner  | Breaks tasks into steps, clarifies requirements, and confirms user intent.     |
+| Builder  | Implements components, hooks, utilities, and requested features.               |
+| Reviewer | Audits generated code for accuracy, quality, safety, and guideline compliance. |
 
 ---
 
@@ -94,26 +94,36 @@ A task is considered complete when all of the following are true:
 ## Developer Commands
 
 ### Type Checking
+
 #### Single file
+
 npx tsc --noEmit --pretty --project tsconfig.json <path/to/file.ts>
 
 #### Entire project
+
 npm run type-check
 
 ### Formatting
+
 #### Single File
+
 npx prettier --write <file_path>
 
 #### All files
+
 npm run format
 
 ### Linting
+
 #### Project-wide
+
 npm run lint
 
 #### Single file
+
 npx eslint <file_path>
 
 ### Dev Server
+
 Start the local Next.js development environment:
 npm run dev

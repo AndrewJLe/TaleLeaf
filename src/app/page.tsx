@@ -24,7 +24,9 @@ export default function Home() {
                 <h1 className="text-6xl font-black bg-gradient-to-r from-emerald-800 to-emerald-600 bg-clip-text text-transparent">
                   TaleLeaf
                 </h1>
-                <p className="text-emerald-700 font-medium text-lg">Your reading garden</p>
+                <p className="text-emerald-700 font-medium text-lg">
+                  Your reading garden
+                </p>
               </div>
             </div>
           </header>
@@ -35,12 +37,14 @@ export default function Home() {
             <div className="space-y-8">
               <div className="space-y-6">
                 <h2 className="text-4xl font-bold text-emerald-900 leading-tight">
-                  Track your stories,<br />
+                  Track your stories,
+                  <br />
                   <span className="text-amber-700">protect from spoilers</span>
                 </h2>
                 <p className="text-lg text-emerald-700 leading-relaxed">
-                  A gentle place to track characters, locations and notes as you read.
-                  Control exactly what the AI can see with page windows and keep spoilers at bay.
+                  A gentle place to track characters, locations and notes as you
+                  read. Control exactly what the AI can see with page windows
+                  and keep spoilers at bay.
                 </p>
               </div>
 
@@ -52,7 +56,9 @@ export default function Home() {
                   <span className="text-xl">📚</span>
                   Open your library
                 </Link>
-                <p className="text-sm text-emerald-600">Start tracking your first book today</p>
+                <p className="text-sm text-emerald-600">
+                  Start tracking your first book today
+                </p>
               </div>
             </div>
 
@@ -63,9 +69,14 @@ export default function Home() {
                   <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
                     <span className="text-lg">🎭</span>
                   </div>
-                  <h3 className="text-lg font-semibold text-emerald-900">Character Tracking</h3>
+                  <h3 className="text-lg font-semibold text-emerald-900">
+                    Character Tracking
+                  </h3>
                 </div>
-                <p className="text-emerald-700">Keep detailed notes on characters as they develop throughout your story.</p>
+                <p className="text-emerald-700">
+                  Keep detailed notes on characters as they develop throughout
+                  your story.
+                </p>
               </div>
 
               <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-amber-200 shadow-lg hover:shadow-xl transition-all duration-200">
@@ -73,9 +84,14 @@ export default function Home() {
                   <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
                     <span className="text-lg">🛡️</span>
                   </div>
-                  <h3 className="text-lg font-semibold text-amber-900">Spoiler Protection</h3>
+                  <h3 className="text-lg font-semibold text-amber-900">
+                    Spoiler Protection
+                  </h3>
                 </div>
-                <p className="text-amber-700">AI only sees the pages you choose, keeping future plot points hidden.</p>
+                <p className="text-amber-700">
+                  AI only sees the pages you choose, keeping future plot points
+                  hidden.
+                </p>
               </div>
 
               <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-emerald-200 shadow-lg hover:shadow-xl transition-all duration-200">
@@ -83,9 +99,14 @@ export default function Home() {
                   <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
                     <span className="text-lg">🗺️</span>
                   </div>
-                  <h3 className="text-lg font-semibold text-emerald-900">World Building</h3>
+                  <h3 className="text-lg font-semibold text-emerald-900">
+                    World Building
+                  </h3>
                 </div>
-                <p className="text-emerald-700">Track locations, notes, and plot developments in organized sections.</p>
+                <p className="text-emerald-700">
+                  Track locations, notes, and plot developments in organized
+                  sections.
+                </p>
               </div>
             </div>
           </main>

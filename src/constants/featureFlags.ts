@@ -15,18 +15,28 @@ interface FeatureFlags {
 
 // Parse query parameters for flag overrides (dev/testing)
 function parseQueryFlags(): Partial<FeatureFlags> {
-  if (typeof window === 'undefined') return {};
+  if (typeof window === "undefined") return {};
 
   const params = new URLSearchParams(window.location.search);
-  const flagParam = params.get('ff');
+  const flagParam = params.get("ff");
   if (!flagParam) return {};
 
   const flags: Partial<FeatureFlags> = {};
-  flagParam.split(',').forEach(flag => {
-    const [key, value] = flag.split(':');
-    const enabled = value !== 'off' && value !== 'false';
+  flagParam.split(",").forEach((flag) => {
+    const [key, value] = flag.split(":");
+    const enabled = value !== "off" && value !== "false";
     if (!key) return;
-    if (['notesV2', 'locationsV2', 'aiSummaries', 'collabPreview', 'confirmDeleteEntities', 'telemetryBasic', 'debugAIChat'].includes(key)) {
+    if (
+      [
+        "notesV2",
+        "locationsV2",
+        "aiSummaries",
+        "collabPreview",
+        "confirmDeleteEntities",
+        "telemetryBasic",
+        "debugAIChat",
+      ].includes(key)
+    ) {
       (flags as any)[key] = enabled;
     }
   });
@@ -45,16 +55,16 @@ function getFeatureFlags(): FeatureFlags {
     confirmDeleteEntities: true,
     telemetryBasic: true,
     // New debug-only flag
-    debugAIChat: false
+    debugAIChat: false,
   };
 
-  if (typeof window === 'undefined') return defaults;
+  if (typeof window === "undefined") return defaults;
 
   // Load from localStorage
   const stored: Partial<FeatureFlags> = {};
   Object.keys(defaults).forEach((key) => {
     const value = localStorage.getItem(`ff.${key}`);
-    if (value === '1' || value === 'true') {
+    if (value === "1" || value === "true") {
       stored[key as keyof FeatureFlags] = true;
     }
   });
@@ -67,10 +77,10 @@ function getFeatureFlags(): FeatureFlags {
 
 // Set feature flag (persists to localStorage)
 function setFeatureFlag(flag: keyof FeatureFlags, enabled: boolean) {
-  if (typeof window === 'undefined') return;
+  if (typeof window === "undefined") return;
 
   if (enabled) {
-    localStorage.setItem(`ff.${flag}`, '1');
+    localStorage.setItem(`ff.${flag}`, "1");
   } else {
     localStorage.removeItem(`ff.${flag}`);
   }

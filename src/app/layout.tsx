@@ -14,7 +14,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "TaleLeaf - Your Reading Garden",
-  description: "Track characters, locations and notes as you read. Control exactly what the AI can see with page windows and keep spoilers at bay.",
+  description:
+    "Track characters, locations and notes as you read. Control exactly what the AI can see with page windows and keep spoilers at bay.",
 };
 
 export default function RootLayout({

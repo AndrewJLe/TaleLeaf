@@ -1,73 +1,60 @@
 {
-    "terminal.integrated.profiles.windows": {
-        "PowerShell 7": {
-            "path": "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
-            "args": [
-                "-NoExit"
-            ],
-            "icon": "terminal-powershell"
-        },
-        "PowerShell": {
-            "source": "PowerShell",
-            "icon": "terminal-powershell"
-        },
-        "Command Prompt": {
-            "path": [
-                "${env:windir}\\Sysnative\\cmd.exe",
-                "${env:windir}\\System32\\cmd.exe"
-            ],
-            "args": [],
-            "icon": "terminal-cmd"
-        },
-        "Git Bash": {
-            "source": "Git Bash"
-        }
+  "terminal.integrated.profiles.windows": {
+    "PowerShell 7": {
+      "path": "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+      "args": ["-NoExit"],
+      "icon": "terminal-powershell"
     },
-    "terminal.integrated.commandsToSkipShell": [
-        "language-julia.interrupt"
-    ],
-    "terminal.integrated.shellArgs.windows": [
-        "-NoExit",
-        "-ExecutionPolicy",
-        "Bypass"
-    ],
-    // TypeScript and JavaScript settings
-    "typescript.preferences.includePackageJsonAutoImports": "on",
-    "typescript.suggest.autoImports": true,
-    "javascript.suggest.autoImports": true,
-    // Editor settings for better development experience
-    "editor.formatOnSave": true,
-    "editor.codeActionsOnSave": {
-        "source.fixAll.eslint": "explicit",
-        "source.organizeImports": "explicit"
+    "PowerShell": {
+      "source": "PowerShell",
+      "icon": "terminal-powershell"
     },
-    "editor.tabSize": 2,
-    "editor.insertSpaces": true,
-    // File associations
-    "files.associations": {
-        "*.tsx": "typescriptreact",
-        "*.ts": "typescript"
+    "Command Prompt": {
+      "path": [
+        "${env:windir}\\Sysnative\\cmd.exe",
+        "${env:windir}\\System32\\cmd.exe"
+      ],
+      "args": [],
+      "icon": "terminal-cmd"
     },
-    // Emmet settings
-    "emmet.includeLanguages": {
-        "typescriptreact": "html"
-    },
-    // Tailwind CSS IntelliSense
-    "tailwindCSS.includeLanguages": {
-        "typescriptreact": "html"
-    },
-    "tailwindCSS.experimental.classRegex": [
-        [
-            "clsx\\(([^)]*)\\)",
-            "(?:'|\"|`)([^']*)(?:'|\"|`)"
-        ],
-        [
-            "classnames\\(([^)]*)\\)",
-            "'([^']*)'"
-        ],
-        [
-            "cn\\(([^)]*)\\)",
-            "(?:'|\"|`)([^']*)(?:'|\"|`)"
-        ]
-    ]
+    "Git Bash": {
+      "source": "Git Bash"
+    }
+  },
+  "terminal.integrated.commandsToSkipShell": ["language-julia.interrupt"],
+  "terminal.integrated.shellArgs.windows": [
+    "-NoExit",
+    "-ExecutionPolicy",
+    "Bypass"
+  ],
+  // TypeScript and JavaScript settings
+  "typescript.preferences.includePackageJsonAutoImports": "on",
+  "typescript.suggest.autoImports": true,
+  "javascript.suggest.autoImports": true,
+  // Editor settings for better development experience
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "explicit"
+  },
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  // File associations
+  "files.associations": {
+    "*.tsx": "typescriptreact",
+    "*.ts": "typescript"
+  },
+  // Emmet settings
+  "emmet.includeLanguages": {
+    "typescriptreact": "html"
+  },
+  // Tailwind CSS IntelliSense
+  "tailwindCSS.includeLanguages": {
+    "typescriptreact": "html"
+  },
+  "tailwindCSS.experimental.classRegex": [
+    ["clsx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+    ["classnames\\(([^)]*)\\)", "'([^']*)'"],
+    ["cn\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"]
+  ]
 }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 interface SaveStatusProps {
   isSaving?: boolean;
@@ -11,11 +11,13 @@ export const SaveStatus: React.FC<SaveStatusProps> = ({
   isSaving = false,
   lastSaved = null,
   error = null,
-  className = ''
+  className = "",
 }) => {
   if (isSaving) {
     return (
-      <div className={`flex items-center gap-1.5 text-xs text-blue-600 ${className}`}>
+      <div
+        className={`flex items-center gap-1.5 text-xs text-blue-600 ${className}`}
+      >
         <div className="w-3 h-3 border border-blue-600 border-t-transparent rounded-full animate-spin" />
         <span>Saving...</span>
       </div>
@@ -24,7 +26,9 @@ export const SaveStatus: React.FC<SaveStatusProps> = ({
 
   if (error) {
     return (
-      <div className={`flex items-center gap-1.5 text-xs text-red-600 ${className}`}>
+      <div
+        className={`flex items-center gap-1.5 text-xs text-red-600 ${className}`}
+      >
         <span>⚠️</span>
         <span>Save failed</span>
       </div>
@@ -33,10 +37,10 @@ export const SaveStatus: React.FC<SaveStatusProps> = ({
 
   if (lastSaved) {
     const timeAgo = Math.floor((Date.now() - lastSaved.getTime()) / 1000);
-    let timeText = '';
+    let timeText = "";
 
     if (timeAgo < 5) {
-      timeText = 'just now';
+      timeText = "just now";
     } else if (timeAgo < 60) {
       timeText = `${timeAgo}s ago`;
     } else if (timeAgo < 3600) {
@@ -46,7 +50,9 @@ export const SaveStatus: React.FC<SaveStatusProps> = ({
     }
 
     return (
-      <div className={`flex items-center gap-1.5 text-xs text-green-600 ${className}`}>
+      <div
+        className={`flex items-center gap-1.5 text-xs text-green-600 ${className}`}
+      >
         <span>✓</span>
         <span>Saved {timeText}</span>
       </div>

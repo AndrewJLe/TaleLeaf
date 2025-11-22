@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState } from "react";
 
 export interface UseUnsavedChangesResult {
   hasUnsavedChanges: boolean;
@@ -12,11 +12,11 @@ export function useUnsavedChanges(): UseUnsavedChangesResult {
   const [dirtyStates, setDirtyStates] = useState<Record<string, boolean>>({});
 
   const registerUnsavedCheck = useCallback((key: string, isDirty: boolean) => {
-    setDirtyStates(prev => ({ ...prev, [key]: isDirty }));
+    setDirtyStates((prev) => ({ ...prev, [key]: isDirty }));
   }, []);
 
   const unregisterUnsavedCheck = useCallback((key: string) => {
-    setDirtyStates(prev => {
+    setDirtyStates((prev) => {
       const next = { ...prev };
       delete next[key];
       return next;
@@ -33,6 +33,6 @@ export function useUnsavedChanges(): UseUnsavedChangesResult {
     hasUnsavedChanges,
     registerUnsavedCheck,
     unregisterUnsavedCheck,
-    clearAll
+    clearAll,
   };
 }

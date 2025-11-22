@@ -8,34 +8,42 @@
  */
 
 // We lazy-load pdfjs to (a) apply polyfills first, (b) avoid SSR evaluation errors, (c) cut initial bundle size.
-type PDFJSLib = typeof import('pdfjs-dist');
+type PDFJSLib = typeof import("pdfjs-dist");
 
 class PDFJSDynamicLoader {
   private static _lib: PDFJSLib | null = null;
   static async load(): Promise<PDFJSLib> {
     if (this._lib) return this._lib;
-    if (typeof window === 'undefined') {
-      throw new Error('PDF.js can only be loaded in a browser environment');
+    if (typeof window === "undefined") {
+      throw new Error("PDF.js can only be loaded in a browser environment");
     }
     // Polyfill Promise.withResolvers if missing (Chrome < 124 / some runtimes)
     if (!(Promise as any).withResolvers) {
-      (Promise as any).withResolvers = function withResolversPolyfill<T = unknown>() {
+      (Promise as any).withResolvers = function withResolversPolyfill<
+        T = unknown,
+      >() {
         let resolve!: (value: T | PromiseLike<T>) => void;
         let reject!: (reason?: any) => void;
-        const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+        const promise = new Promise<T>((res, rej) => {
+          resolve = res;
+          reject = rej;
+        });
         return { promise, resolve, reject };
       };
     }
-    const lib = await import('pdfjs-dist');
+    const lib = await import("pdfjs-dist");
     // Try local module worker first (v4 naming: pdf.worker.mjs)
     const TRY_WORKER_PATHS = [
-      'pdfjs-dist/build/pdf.worker.mjs',
-      'pdfjs-dist/build/pdf.worker.js',
+      "pdfjs-dist/build/pdf.worker.mjs",
+      "pdfjs-dist/build/pdf.worker.js",
     ];
     let workerSet = false;
     for (const p of TRY_WORKER_PATHS) {
       try {
-        (lib as any).GlobalWorkerOptions.workerSrc = new URL(p, import.meta.url).toString();
+        (lib as any).GlobalWorkerOptions.workerSrc = new URL(
+          p,
+          import.meta.url,
+        ).toString();
         workerSet = true;
         break;
       } catch {
@@ -44,7 +52,8 @@ class PDFJSDynamicLoader {
     }
     if (!workerSet) {
       // Fallback to CDN
-      (lib as any).GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${(lib as any).version}/pdf.worker.min.js`;
+      (lib as any).GlobalWorkerOptions.workerSrc =
+        `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${(lib as any).version}/pdf.worker.min.js`;
     }
     this._lib = lib;
     return lib;
@@ -68,7 +77,7 @@ export class PDFUtils {
    */
   static async getPageCount(file: File | ArrayBuffer): Promise<number> {
     const arrayBuffer = file instanceof File ? await file.arrayBuffer() : file;
-    console.log('📄 Getting page count via dynamic PDF.js load...');
+    console.log("📄 Getting page count via dynamic PDF.js load...");
     try {
       const pdfjsLib = await PDFJSDynamicLoader.load();
       const loadOnce = async () => {
@@ -89,22 +98,32 @@ export class PDFUtils {
         console.log(`✅ Accurate page count from PDF.js: ${pc}`);
         return pc;
       } catch (firstErr: any) {
-        if (firstErr && typeof firstErr.message === 'string' && firstErr.message.includes('GlobalWorkerOptions.workerSrc')) {
-          console.warn('WorkerSrc warning encountered, applying CDN fallback and retrying...');
+        if (
+          firstErr &&
+          typeof firstErr.message === "string" &&
+          firstErr.message.includes("GlobalWorkerOptions.workerSrc")
+        ) {
+          console.warn(
+            "WorkerSrc warning encountered, applying CDN fallback and retrying...",
+          );
           try {
-            (pdfjsLib as any).GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${(pdfjsLib as any).version}/pdf.worker.min.js`;
+            (pdfjsLib as any).GlobalWorkerOptions.workerSrc =
+              `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${(pdfjsLib as any).version}/pdf.worker.min.js`;
             const pc2 = await loadOnce();
             console.log(`✅ Page count after workerSrc retry: ${pc2}`);
             return pc2;
           } catch (retryErr) {
-            console.error('Retry after setting workerSrc failed, will fallback to simple method.', retryErr);
+            console.error(
+              "Retry after setting workerSrc failed, will fallback to simple method.",
+              retryErr,
+            );
             throw retryErr;
           }
         }
         throw firstErr;
       }
     } catch (err) {
-      console.error('❌ Page count via PDF.js failed:', err);
+      console.error("❌ Page count via PDF.js failed:", err);
       throw err;
     }
   }
@@ -115,7 +134,7 @@ export class PDFUtils {
     try {
       // Convert to string to search for page count indicators
       const uint8Array = new Uint8Array(arrayBuffer);
-      let text = '';
+      let text = "";
 
       // Read more of the PDF to find page count hints
       const sampleSize = Math.min(200000, uint8Array.length); // First 200KB
@@ -125,11 +144,11 @@ export class PDFUtils {
         if (byte >= 32 && byte <= 126) {
           text += String.fromCharCode(byte);
         } else if (byte === 10 || byte === 13) {
-          text += ' '; // Replace newlines with spaces
+          text += " "; // Replace newlines with spaces
         }
       }
 
-      console.log('PDF text sample:', text.substring(0, 1000)); // Debug log
+      console.log("PDF text sample:", text.substring(0, 1000)); // Debug log
 
       // Look for common PDF page count patterns (more comprehensive)
       const patterns = [
@@ -151,7 +170,8 @@ export class PDFUtils {
           const count1 = parseInt(match[1]);
           const count2 = match[2] ? parseInt(match[2]) : 0;
 
-          if (count1 > 0 && count1 < 100000) { // Reasonable page count
+          if (count1 > 0 && count1 < 100000) {
+            // Reasonable page count
             foundCounts.push(count1);
             maxCount = Math.max(maxCount, count1);
           }
@@ -162,8 +182,8 @@ export class PDFUtils {
         }
       }
 
-      console.log('Found page counts:', foundCounts);
-      console.log('Selected max count:', maxCount);
+      console.log("Found page counts:", foundCounts);
+      console.log("Selected max count:", maxCount);
 
       // If we found multiple counts, try to be smarter about selection
       if (foundCounts.length > 0) {
@@ -179,7 +199,7 @@ export class PDFUtils {
 
       return Math.max(1, maxCount);
     } catch (error) {
-      console.warn('Simple page count extraction failed:', error);
+      console.warn("Simple page count extraction failed:", error);
       return 1; // Default to 1 page
     }
   }
@@ -189,16 +209,22 @@ export class PDFUtils {
    */
   static async getPDFInfo(file: File | ArrayBuffer): Promise<PDFInfo> {
     const arrayBuffer = file instanceof File ? await file.arrayBuffer() : file;
-    console.log('🚀 getPDFInfo start');
+    console.log("🚀 getPDFInfo start");
     let pageCount = 1;
     try {
       pageCount = await this.getPageCount(arrayBuffer);
     } catch (pcErr) {
-      console.warn('Page count via PDF.js failed; using fallback simple parser.', pcErr);
+      console.warn(
+        "Page count via PDF.js failed; using fallback simple parser.",
+        pcErr,
+      );
       try {
         pageCount = await this.getPageCountSimple(arrayBuffer);
       } catch (simpleErr) {
-        console.error('Fallback simple page count also failed, keeping 1.', simpleErr);
+        console.error(
+          "Fallback simple page count also failed, keeping 1.",
+          simpleErr,
+        );
         pageCount = 1;
       }
     }
@@ -219,11 +245,14 @@ export class PDFUtils {
         const metadataResult = await pdf.getMetadata();
         metadata = metadataResult.info || {};
       } catch (mErr) {
-        console.warn('Metadata extraction failed:', mErr);
+        console.warn("Metadata extraction failed:", mErr);
       }
       pdf.destroy();
     } catch (metaOuterErr) {
-      console.warn('Unable to reload PDF for metadata (continuing):', metaOuterErr);
+      console.warn(
+        "Unable to reload PDF for metadata (continuing):",
+        metaOuterErr,
+      );
     }
 
     return {
@@ -244,14 +273,17 @@ export class PDFUtils {
   static async validatePDF(file: File): Promise<boolean> {
     try {
       // Check file extension and MIME type first
-      if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+      if (
+        !file.name.toLowerCase().endsWith(".pdf") &&
+        file.type !== "application/pdf"
+      ) {
         return false;
       }
 
       // Try to read the PDF header
       const chunk = file.slice(0, 1024);
       const text = await chunk.text();
-      return text.startsWith('%PDF-');
+      return text.startsWith("%PDF-");
     } catch {
       return false;
     }
@@ -278,7 +310,10 @@ export class PDFUtils {
    */
   static async extractAllPageTexts(
     file: File | ArrayBuffer,
-    opts: { maxPages?: number; onProgress?: (current: number, total: number) => void } = {}
+    opts: {
+      maxPages?: number;
+      onProgress?: (current: number, total: number) => void;
+    } = {},
   ): Promise<string[]> {
     const { maxPages, onProgress } = opts;
     const arrayBuffer = file instanceof File ? await file.arrayBuffer() : file;
@@ -301,21 +336,21 @@ export class PDFUtils {
           // getTextContent returns an object with items containing strings.
           const content = await page.getTextContent();
           const pageText = content.items
-            .map((it: any) => (typeof it.str === 'string' ? it.str : ''))
-            .join(' ') // join with space to avoid word collisions
-            .replace(/\s+/g, ' ') // normalize whitespace
+            .map((it: any) => (typeof it.str === "string" ? it.str : ""))
+            .join(" ") // join with space to avoid word collisions
+            .replace(/\s+/g, " ") // normalize whitespace
             .trim();
           texts[i - 1] = pageText;
         } catch (pageErr) {
           console.warn(`Failed to extract page ${i}:`, pageErr);
-          texts[i - 1] = '';
+          texts[i - 1] = "";
         }
         if (onProgress) onProgress(i, targetTotal);
       }
       pdf.destroy();
       return texts;
     } catch (err) {
-      console.error('PDF page text extraction failed:', err);
+      console.error("PDF page text extraction failed:", err);
       if (texts.length > 0) return texts; // partial
       throw err;
     }

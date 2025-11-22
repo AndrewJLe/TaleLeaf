@@ -1,5 +1,5 @@
-import React from 'react';
-import { Button } from './ui/Button';
+import React from "react";
+import { Button } from "./ui/Button";
 
 interface ConfirmDeleteDialogProps {
   isOpen: boolean;
@@ -14,7 +14,7 @@ export const ConfirmDeleteDialog: React.FC<ConfirmDeleteDialogProps> = ({
   bookTitle,
   onConfirm,
   onCancel,
-  isDeleting = false
+  isDeleting = false,
 }) => {
   if (!isOpen) return null;
 
@@ -34,7 +34,9 @@ export const ConfirmDeleteDialog: React.FC<ConfirmDeleteDialogProps> = ({
           </p>
           <div className="bg-red-50 border border-red-200 rounded-lg p-3">
             <p className="text-sm text-red-800">
-              <strong>This action cannot be undone.</strong> This will permanently delete this book and all associated data including characters, chapters, locations, notes, and uploaded files.
+              <strong>This action cannot be undone.</strong> This will
+              permanently delete this book and all associated data including
+              characters, chapters, locations, notes, and uploaded files.
             </p>
           </div>
         </div>
@@ -59,7 +61,7 @@ export const ConfirmDeleteDialog: React.FC<ConfirmDeleteDialogProps> = ({
                 <span>Deleting...</span>
               </>
             ) : (
-              'Delete Book'
+              "Delete Book"
             )}
           </button>
         </div>

@@ -1,33 +1,44 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { preprocessBookContext } from '../../../../../lib/server/context-preprocess';
-import { isSupabaseEnabled } from '../../../../../lib/supabase-enabled';
-import { createServerSupabase } from '../../../../../lib/supabase-server';
+import { NextRequest, NextResponse } from "next/server";
+import { preprocessBookContext } from "../../../../../lib/server/context-preprocess";
+import { isSupabaseEnabled } from "../../../../../lib/supabase-enabled";
+import { createServerSupabase } from "../../../../../lib/supabase-server";
 
-async function ensureBookOwnership(supabase: any, bookId: string, userId: string) {
+async function ensureBookOwnership(
+  supabase: any,
+  bookId: string,
+  userId: string,
+) {
   const { data, error } = await supabase
-    .from('books')
-    .select('id')
-    .eq('id', bookId)
-    .eq('user_id', userId)
+    .from("books")
+    .select("id")
+    .eq("id", bookId)
+    .eq("user_id", userId)
     .maybeSingle();
 
-  if (error || !data) throw new Error('not-found');
+  if (error || !data) throw new Error("not-found");
 }
 
-export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function POST(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
   if (!isSupabaseEnabled) {
     return NextResponse.json({ disabled: true }, { status: 400 });
   }
 
   const { id: bookId } = await context.params;
 
-  const authHeader = req.headers.get('authorization');
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+  const authHeader = req.headers.get("authorization");
+  const token = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7)
+    : undefined;
   const supabase = createServerSupabase(token);
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   try {
@@ -41,15 +52,18 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     const result = await preprocessBookContext(supabase, bookId, pages);
 
     return NextResponse.json({
-      status: 'done',
+      status: "done",
       processedPages: result.processedPages,
-      totalPages: result.totalPages
+      totalPages: result.totalPages,
     });
   } catch (error: any) {
-    if (error?.message === 'not-found' || error?.message === 'book-not-found') {
-      return NextResponse.json({ error: 'not-found' }, { status: 404 });
+    if (error?.message === "not-found" || error?.message === "book-not-found") {
+      return NextResponse.json({ error: "not-found" }, { status: 404 });
     }
-    console.error('context-preprocess failed', error);
-    return NextResponse.json({ error: 'context-preprocess-failed' }, { status: 500 });
+    console.error("context-preprocess failed", error);
+    return NextResponse.json(
+      { error: "context-preprocess-failed" },
+      { status: 500 },
+    );
   }
 }

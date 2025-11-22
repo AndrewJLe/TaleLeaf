@@ -1,14 +1,14 @@
-import { useEffect, useState } from 'react';
-import { featureFlags, setFeatureFlag } from '../constants/featureFlags';
+import { useEffect, useState } from "react";
+import { featureFlags, setFeatureFlag } from "../constants/featureFlags";
 
 export function FeatureFlagDebug() {
-  if (typeof window === 'undefined' || process.env.NODE_ENV === 'production') {
+  if (typeof window === "undefined" || process.env.NODE_ENV === "production") {
     return null;
   }
 
   const [minimized, setMinimized] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('ff.ui.minimized') === '1';
+      return localStorage.getItem("ff.ui.minimized") === "1";
     } catch {
       return false;
     }
@@ -16,7 +16,8 @@ export function FeatureFlagDebug() {
 
   useEffect(() => {
     try {
-      if (minimized) localStorage.setItem('ff.ui.minimized', '1'); else localStorage.removeItem('ff.ui.minimized');
+      if (minimized) localStorage.setItem("ff.ui.minimized", "1");
+      else localStorage.removeItem("ff.ui.minimized");
     } catch {
       // ignore
     }
@@ -26,10 +27,15 @@ export function FeatureFlagDebug() {
 
   if (minimized) {
     return (
-      <div className="fixed bottom-4 right-4 bg-gray-900 text-white p-2 rounded-md text-xs font-mono shadow-lg z-50 cursor-pointer" onClick={() => setMinimized(false)}>
+      <div
+        className="fixed bottom-4 right-4 bg-gray-900 text-white p-2 rounded-md text-xs font-mono shadow-lg z-50 cursor-pointer"
+        onClick={() => setMinimized(false)}
+      >
         <div className="flex items-center gap-2">
           <div className="font-bold">🚩 Flags</div>
-          <div className="text-xs text-gray-300">{flags.debugAIChat ? 'AI Debug ON' : 'AI Debug OFF'}</div>
+          <div className="text-xs text-gray-300">
+            {flags.debugAIChat ? "AI Debug ON" : "AI Debug OFF"}
+          </div>
         </div>
       </div>
     );
@@ -40,16 +46,25 @@ export function FeatureFlagDebug() {
       <div className="flex items-center justify-between mb-2">
         <div className="font-bold">🚩 Feature Flags</div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setMinimized(true)} className="text-gray-300 hover:text-white">─</button>
+          <button
+            onClick={() => setMinimized(true)}
+            className="text-gray-300 hover:text-white"
+          >
+            ─
+          </button>
         </div>
       </div>
 
       <div className="flex items-center justify-between gap-3 mb-1">
-        <span className={flags.debugAIChat ? 'text-green-400' : 'text-gray-400'}>debugAIChat</span>
+        <span
+          className={flags.debugAIChat ? "text-green-400" : "text-gray-400"}
+        >
+          debugAIChat
+        </span>
         <div className="flex items-center gap-1">
-          <span className="text-xs">{flags.debugAIChat ? 'ON' : 'OFF'}</span>
+          <span className="text-xs">{flags.debugAIChat ? "ON" : "OFF"}</span>
           <button
-            onClick={() => setFeatureFlag('debugAIChat', !flags.debugAIChat)}
+            onClick={() => setFeatureFlag("debugAIChat", !flags.debugAIChat)}
             className="text-blue-400 hover:text-blue-300 ml-1 px-1"
           >
             ⚡

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { aiService, TokenBudget, TokenStats } from '../../lib/ai-service';
+import React, { useEffect, useState } from "react";
+import { aiService, TokenBudget, TokenStats } from "../../lib/ai-service";
 
 interface TokenBudgetDisplayProps {
   className?: string;
@@ -7,8 +7,8 @@ interface TokenBudgetDisplayProps {
 }
 
 export const TokenBudgetDisplay: React.FC<TokenBudgetDisplayProps> = ({
-  className = '',
-  compact = false
+  className = "",
+  compact = false,
 }) => {
   const [stats, setStats] = useState<TokenStats>(aiService.getTokenStats());
   const [budget, setBudget] = useState<TokenBudget>(aiService.getTokenBudget());
@@ -28,16 +28,16 @@ export const TokenBudgetDisplay: React.FC<TokenBudgetDisplayProps> = ({
 
     // Also update on window focus (in case usage happened in another tab)
     const handleFocus = () => updateStats();
-    window.addEventListener('focus', handleFocus);
+    window.addEventListener("focus", handleFocus);
 
     return () => {
       clearInterval(interval);
-      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener("focus", handleFocus);
     };
   }, []);
 
   const formatCost = (cost: number) => {
-    if (cost < 0.001) return '<$0.001';
+    if (cost < 0.001) return "<$0.001";
     return `$${cost.toFixed(3)}`;
   };
 
@@ -47,16 +47,17 @@ export const TokenBudgetDisplay: React.FC<TokenBudgetDisplayProps> = ({
 
   const getUsageColor = () => {
     const percent = getDailyUsagePercent();
-    if (percent >= 100) return 'text-red-600 bg-red-100';
-    if (percent >= budget.warningThreshold * 100) return 'text-amber-600 bg-amber-100';
-    return 'text-emerald-600 bg-emerald-100';
+    if (percent >= 100) return "text-red-600 bg-red-100";
+    if (percent >= budget.warningThreshold * 100)
+      return "text-amber-600 bg-amber-100";
+    return "text-emerald-600 bg-emerald-100";
   };
 
   const getProgressBarColor = () => {
     const percent = getDailyUsagePercent();
-    if (percent >= 100) return 'bg-red-500';
-    if (percent >= budget.warningThreshold * 100) return 'bg-amber-500';
-    return 'bg-emerald-500';
+    if (percent >= 100) return "bg-red-500";
+    if (percent >= budget.warningThreshold * 100) return "bg-amber-500";
+    return "bg-emerald-500";
   };
 
   if (compact) {
@@ -65,7 +66,9 @@ export const TokenBudgetDisplay: React.FC<TokenBudgetDisplayProps> = ({
   }
 
   return (
-    <div className={`${className} p-4 bg-white/80 backdrop-blur-sm rounded-lg border border-emerald-200 shadow-sm`}>
+    <div
+      className={`${className} p-4 bg-white/80 backdrop-blur-sm rounded-lg border border-emerald-200 shadow-sm`}
+    >
       <div className="flex items-center gap-2 mb-3">
         <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center">
           <span className="text-white text-sm">💰</span>
@@ -80,7 +83,7 @@ export const TokenBudgetDisplay: React.FC<TokenBudgetDisplayProps> = ({
       <div className="mb-3">
         <div className="flex justify-between text-sm mb-1">
           <span className="text-emerald-700">Today</span>
-          <span className={getUsageColor().split(' ')[0]}>
+          <span className={getUsageColor().split(" ")[0]}>
             {formatCost(stats.todayUsage)} / {formatCost(budget.dailyLimit)}
           </span>
         </div>
@@ -95,11 +98,15 @@ export const TokenBudgetDisplay: React.FC<TokenBudgetDisplayProps> = ({
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="text-center p-2 bg-emerald-50 rounded">
-          <div className="font-medium text-emerald-900">{formatCost(remaining.daily)}</div>
+          <div className="font-medium text-emerald-900">
+            {formatCost(remaining.daily)}
+          </div>
           <div className="text-emerald-600">Remaining</div>
         </div>
         <div className="text-center p-2 bg-amber-50 rounded">
-          <div className="font-medium text-amber-900">{formatCost(stats.sessionUsage)}</div>
+          <div className="font-medium text-amber-900">
+            {formatCost(stats.sessionUsage)}
+          </div>
           <div className="text-amber-700">This Session</div>
         </div>
       </div>

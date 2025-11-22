@@ -1,5 +1,11 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import { ContextPart, RetrievalOptions, RetrievalResult, SummaryJson, WindowSelection } from '../context-window';
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  ContextPart,
+  RetrievalOptions,
+  RetrievalResult,
+  SummaryJson,
+  WindowSelection,
+} from "../context-window";
 
 interface BuildContextParams extends RetrievalOptions {
   supabase: SupabaseClient;
@@ -28,86 +34,105 @@ interface ChunkRow {
   raw_text: string | null;
 }
 
-const roughTokenEstimate = (text: string) => Math.max(1, Math.ceil(text.trim().length / 4));
+const roughTokenEstimate = (text: string) =>
+  Math.max(1, Math.ceil(text.trim().length / 4));
 
-const summarizeEntities = (entities: SummaryJson['entities'] = []) => {
-  if (!entities.length) return '';
+const summarizeEntities = (entities: SummaryJson["entities"] = []) => {
+  if (!entities.length) return "";
   const limited = entities.slice(0, 5);
-  return `Entities: ${limited.map(e => `${e.name} (${e.type})`).join('; ')}`;
+  return `Entities: ${limited.map((e) => `${e.name} (${e.type})`).join("; ")}`;
 };
 
-const summarizeEvents = (events: SummaryJson['events'] = []) => {
-  if (!events.length) return '';
+const summarizeEvents = (events: SummaryJson["events"] = []) => {
+  if (!events.length) return "";
   const limited = events.slice(0, 4);
-  return `Events: ${limited.map(evt => `${evt.what}${evt.who.length ? ` [${evt.who.join(', ')}]` : ''}${evt.page ? ` (p${evt.page})` : ''}`).join(' | ')}`;
+  return `Events: ${limited.map((evt) => `${evt.what}${evt.who.length ? ` [${evt.who.join(", ")}]` : ""}${evt.page ? ` (p${evt.page})` : ""}`).join(" | ")}`;
 };
 
-const summarizeFacts = (facts: SummaryJson['facts'] = []) => {
-  if (!facts.length) return '';
+const summarizeFacts = (facts: SummaryJson["facts"] = []) => {
+  if (!facts.length) return "";
   const limited = facts.slice(0, 4);
-  return `Facts: ${limited.join(' | ')}`;
+  return `Facts: ${limited.join(" | ")}`;
 };
 
-const summarizeOpenQuestions = (questions: SummaryJson['open_questions'] = []) => {
-  if (!questions.length) return '';
+const summarizeOpenQuestions = (
+  questions: SummaryJson["open_questions"] = [],
+) => {
+  if (!questions.length) return "";
   const limited = questions.slice(0, 2);
-  return `Open questions: ${limited.join(' | ')}`;
+  return `Open questions: ${limited.join(" | ")}`;
 };
 
 const renderSummaryJson = (summary?: SummaryJson | null): string => {
-  if (!summary) return '';
+  if (!summary) return "";
   const lines = [
     summarizeEntities(summary.entities),
     summarizeEvents(summary.events),
     summarizeFacts(summary.facts),
-    summarizeOpenQuestions(summary.open_questions)
+    summarizeOpenQuestions(summary.open_questions),
   ].filter(Boolean);
-  return lines.join('\n');
+  return lines.join("\n");
 };
 
 const renderPartLabel = (part: ContextPart) => {
-  if (part.label === 'chapter-summary') {
-    return `Chapter ${part.chapterIndex ?? '?'} summary`;
+  if (part.label === "chapter-summary") {
+    return `Chapter ${part.chapterIndex ?? "?"} summary`;
   }
-  if (part.label === 'page-summary') {
-    return `Page ${part.page ?? '?'} summary`;
+  if (part.label === "page-summary") {
+    return `Page ${part.page ?? "?"} summary`;
   }
-  return `Paragraph (p${part.page ?? '?'}.${part.chapterIndex ?? ''})`;
+  return `Paragraph (p${part.page ?? "?"}.${part.chapterIndex ?? ""})`;
 };
 
 const renderContextText = (parts: ContextPart[]) =>
-  parts.map(part => `### ${renderPartLabel(part)}\n${part.text.trim()}`).join('\n\n');
+  parts
+    .map((part) => `### ${renderPartLabel(part)}\n${part.text.trim()}`)
+    .join("\n\n");
 
-const resolveWindowPages = (selection: WindowSelection, chapterMap: ChapterBoundary[]): { start: number; end: number; chapterIndices: number[] } => {
-  if (selection.type === 'pages') {
+const resolveWindowPages = (
+  selection: WindowSelection,
+  chapterMap: ChapterBoundary[],
+): { start: number; end: number; chapterIndices: number[] } => {
+  if (selection.type === "pages") {
     return {
       start: Math.max(1, selection.start),
       end: Math.max(selection.start, selection.end),
       chapterIndices: chapterMap
-        .filter(ch => ch.start_page <= selection.end && ch.end_page >= selection.start)
-        .map(ch => ch.chapter_index)
+        .filter(
+          (ch) =>
+            ch.start_page <= selection.end && ch.end_page >= selection.start,
+        )
+        .map((ch) => ch.chapter_index),
     };
   }
 
-  const selected = chapterMap.filter(ch => selection.chapterIndices.includes(ch.chapter_index));
+  const selected = chapterMap.filter((ch) =>
+    selection.chapterIndices.includes(ch.chapter_index),
+  );
   if (!selected.length) {
     return {
       start: 1,
       end: 1,
-      chapterIndices: []
+      chapterIndices: [],
     };
   }
   return {
-    start: Math.min(...selected.map(ch => ch.start_page)),
-    end: Math.max(...selected.map(ch => ch.end_page)),
-    chapterIndices: selected.map(ch => ch.chapter_index)
+    start: Math.min(...selected.map((ch) => ch.start_page)),
+    end: Math.max(...selected.map((ch) => ch.end_page)),
+    chapterIndices: selected.map((ch) => ch.chapter_index),
   };
 };
 
-const scoreChunkForQuestion = (chunk: ChunkRow, queryTokens: string[]): number => {
-  const text = chunk.raw_text?.toLowerCase() || '';
+const scoreChunkForQuestion = (
+  chunk: ChunkRow,
+  queryTokens: string[],
+): number => {
+  const text = chunk.raw_text?.toLowerCase() || "";
   if (!text) return 0;
-  return queryTokens.reduce((score, token) => (text.includes(token) ? score + 1 : score), 0);
+  return queryTokens.reduce(
+    (score, token) => (text.includes(token) ? score + 1 : score),
+    0,
+  );
 };
 
 // Placeholder for future pgvector-based similarity. For now, we keep
@@ -116,25 +141,25 @@ async function getRankedChunks(
   supabase: SupabaseClient,
   bookId: string,
   resolvedWindow: { start: number; end: number },
-  queryTokens: string[]
+  queryTokens: string[],
 ): Promise<(ChunkRow & { score: number })[]> {
   const { data: chunkRows, error: chunkErr } = await supabase
-    .from('book_page_chunks')
-    .select('id,page_number,intra_index,raw_text')
-    .eq('book_id', bookId)
-    .gte('page_number', resolvedWindow.start)
-    .lte('page_number', resolvedWindow.end)
-    .order('page_number')
-    .order('intra_index')
+    .from("book_page_chunks")
+    .select("id,page_number,intra_index,raw_text")
+    .eq("book_id", bookId)
+    .gte("page_number", resolvedWindow.start)
+    .lte("page_number", resolvedWindow.end)
+    .order("page_number")
+    .order("intra_index")
     .limit(200);
 
   if (chunkErr) throw chunkErr;
 
   const base = (chunkRows as ChunkRow[] | null) || [];
 
-  const withScores = base.map(chunk => ({
+  const withScores = base.map((chunk) => ({
     ...chunk,
-    score: scoreChunkForQuestion(chunk, queryTokens)
+    score: scoreChunkForQuestion(chunk, queryTokens),
   }));
 
   withScores.sort((a, b) => {
@@ -149,7 +174,9 @@ async function getRankedChunks(
 // Best-effort extraction of an explicit page reference from the user's
 // question, e.g. "what happens on page 334". Returns the page number if
 // found, otherwise null.
-export const extractExplicitPageFromQuestion = (question: string): number | null => {
+export const extractExplicitPageFromQuestion = (
+  question: string,
+): number | null => {
   const match = question.toLowerCase().match(/page\s+(\d{1,5})/);
   if (!match) return null;
   const page = parseInt(match[1], 10);
@@ -167,57 +194,69 @@ interface PageFocusedParams {
 // Build a minimal context focused on a single explicit page. This is used
 // for queries like "what happens on page 15?" to keep token usage low by
 // avoiding full-window summaries and unrelated paragraphs.
-export async function buildPageFocusedContextWindowResult(params: PageFocusedParams): Promise<RetrievalResult & { contextText: string; resolvedWindow: { start: number; end: number; chapterIndices: number[] } }> {
+export async function buildPageFocusedContextWindowResult(
+  params: PageFocusedParams,
+): Promise<
+  RetrievalResult & {
+    contextText: string;
+    resolvedWindow: { start: number; end: number; chapterIndices: number[] };
+  }
+> {
   const { supabase, bookId, page, question, maxContextTokens = 900 } = params;
 
   // Fetch any page summary we have for this page (and optionally neighbors
   // for light surrounding context).
   const { data: pageSummaries, error: pageErr } = await supabase
-    .from('book_page_summaries')
-    .select('page_number,summary_json')
-    .eq('book_id', bookId)
-    .in('page_number', [page - 1, page, page + 1].filter(p => p > 0))
-    .order('page_number');
+    .from("book_page_summaries")
+    .select("page_number,summary_json")
+    .eq("book_id", bookId)
+    .in(
+      "page_number",
+      [page - 1, page, page + 1].filter((p) => p > 0),
+    )
+    .order("page_number");
   if (pageErr) throw pageErr;
 
-  const pageParts: ContextPart[] = (pageSummaries as PageSummaryRow[] || [])
-    .map(row => {
+  const pageParts: ContextPart[] = ((pageSummaries as PageSummaryRow[]) || [])
+    .map((row) => {
       const text = renderSummaryJson(row.summary_json);
       return {
-        label: 'page-summary',
+        label: "page-summary",
         page: row.page_number,
         text,
         citations: [{ page: row.page_number }],
-        estimatedTokens: roughTokenEstimate(text)
+        estimatedTokens: roughTokenEstimate(text),
       } as ContextPart;
     })
-    .filter(part => !!part.text);
+    .filter((part) => !!part.text);
 
   // Always try to include one or two raw paragraph chunks from the target page.
   const { data: chunks, error: chunkErr } = await supabase
-    .from('book_page_chunks')
-    .select('id,page_number,intra_index,raw_text')
-    .eq('book_id', bookId)
-    .eq('page_number', page)
-    .order('intra_index')
+    .from("book_page_chunks")
+    .select("id,page_number,intra_index,raw_text")
+    .eq("book_id", bookId)
+    .eq("page_number", page)
+    .order("intra_index")
     .limit(2);
   if (chunkErr) throw chunkErr;
 
-  const paragraphParts: ContextPart[] = ((chunks as ChunkRow[] | null) || []).map(chunk => {
-    const raw = chunk.raw_text?.trim() || '';
-    const text = raw.length > 900 ? `${raw.slice(0, 900)}…` : raw;
-    return {
-      label: 'paragraph',
-      page: chunk.page_number,
-      text,
-      citations: [{ page: chunk.page_number, chunkId: chunk.id }],
-      estimatedTokens: roughTokenEstimate(text)
-    } as ContextPart;
-  }).filter(part => !!part.text);
+  const paragraphParts: ContextPart[] = ((chunks as ChunkRow[] | null) || [])
+    .map((chunk) => {
+      const raw = chunk.raw_text?.trim() || "";
+      const text = raw.length > 900 ? `${raw.slice(0, 900)}…` : raw;
+      return {
+        label: "paragraph",
+        page: chunk.page_number,
+        text,
+        citations: [{ page: chunk.page_number, chunkId: chunk.id }],
+        estimatedTokens: roughTokenEstimate(text),
+      } as ContextPart;
+    })
+    .filter((part) => !!part.text);
 
   const orderedParts = [...pageParts, ...paragraphParts];
   if (!orderedParts.length) {
-    throw new Error('context-window-data-missing');
+    throw new Error("context-window-data-missing");
   }
 
   const includedParts: ContextPart[] = [];
@@ -253,35 +292,42 @@ ${contextText}`;
     systemPrompt,
     userPrompt: question,
     parts: includedParts,
-    citations: includedParts.flatMap(part => part.citations),
+    citations: includedParts.flatMap((part) => part.citations),
     estimatedTokens,
     tokenEstimate: {
       inputTokens: estimatedTokens,
       estimatedOutputTokens: 500,
       totalTokens: estimatedTokens + 500,
       estimatedCost: 0,
-      provider: 'context-window-page-focused'
+      provider: "context-window-page-focused",
     },
     contextText,
-    resolvedWindow: { start, end, chapterIndices: [] }
+    resolvedWindow: { start, end, chapterIndices: [] },
   };
 }
 
-export async function buildContextWindowResult(params: BuildContextParams): Promise<RetrievalResult & { contextText: string; resolvedWindow: { start: number; end: number; chapterIndices: number[] } }> {
+export async function buildContextWindowResult(
+  params: BuildContextParams,
+): Promise<
+  RetrievalResult & {
+    contextText: string;
+    resolvedWindow: { start: number; end: number; chapterIndices: number[] };
+  }
+> {
   const {
     supabase,
     bookId,
     window,
     question,
     maxContextTokens = 9999,
-    desiredK = { min: 4, max: 12 }
+    desiredK = { min: 4, max: 12 },
   } = params;
 
   const { data: chapterMapRows, error: chapterErr } = await supabase
-    .from('book_chapter_map')
-    .select('chapter_index,start_page,end_page')
-    .eq('book_id', bookId)
-    .order('chapter_index');
+    .from("book_chapter_map")
+    .select("chapter_index,start_page,end_page")
+    .eq("book_id", bookId)
+    .order("chapter_index");
   if (chapterErr) throw chapterErr;
   const chapterMap = (chapterMapRows as ChapterBoundary[]) || [];
   const resolvedWindow = resolveWindowPages(window, chapterMap);
@@ -289,103 +335,132 @@ export async function buildContextWindowResult(params: BuildContextParams): Prom
   const chapterIndices = resolvedWindow.chapterIndices.length
     ? resolvedWindow.chapterIndices
     : chapterMap
-      .filter(ch => ch.start_page <= resolvedWindow.end && ch.end_page >= resolvedWindow.start)
-      .map(ch => ch.chapter_index);
+        .filter(
+          (ch) =>
+            ch.start_page <= resolvedWindow.end &&
+            ch.end_page >= resolvedWindow.start,
+        )
+        .map((ch) => ch.chapter_index);
 
-  const [{ data: chapterSummaries }, { data: pageSummaries }] = await Promise.all([
-    supabase
-      .from('book_chapter_summaries')
-      .select('chapter_index,summary_json')
-      .eq('book_id', bookId)
-      .in('chapter_index', chapterIndices.length ? chapterIndices : [-1])
-      .order('chapter_index'),
-    supabase
-      .from('book_page_summaries')
-      .select('page_number,summary_json')
-      .eq('book_id', bookId)
-      .gte('page_number', resolvedWindow.start)
-      .lte('page_number', resolvedWindow.end)
-      .order('page_number')
-  ]);
+  const [{ data: chapterSummaries }, { data: pageSummaries }] =
+    await Promise.all([
+      supabase
+        .from("book_chapter_summaries")
+        .select("chapter_index,summary_json")
+        .eq("book_id", bookId)
+        .in("chapter_index", chapterIndices.length ? chapterIndices : [-1])
+        .order("chapter_index"),
+      supabase
+        .from("book_page_summaries")
+        .select("page_number,summary_json")
+        .eq("book_id", bookId)
+        .gte("page_number", resolvedWindow.start)
+        .lte("page_number", resolvedWindow.end)
+        .order("page_number"),
+    ]);
 
-  const queryTokens = question.toLowerCase().split(/[^a-z0-9]+/).filter(token => token.length > 2);
+  const queryTokens = question
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 2);
 
-  const chapterParts: ContextPart[] = (chapterSummaries as ChapterSummaryRow[] || [])
-    .map(row => {
+  const chapterParts: ContextPart[] = (
+    (chapterSummaries as ChapterSummaryRow[]) || []
+  )
+    .map((row) => {
       const text = renderSummaryJson(row.summary_json);
       return {
-        label: 'chapter-summary',
+        label: "chapter-summary",
         chapterIndex: row.chapter_index,
         text,
         citations: [],
-        estimatedTokens: roughTokenEstimate(text)
+        estimatedTokens: roughTokenEstimate(text),
       } as ContextPart;
     })
-    .filter(part => !!part.text);
+    .filter((part) => !!part.text);
 
-  const pageParts: ContextPart[] = (pageSummaries as PageSummaryRow[] || [])
-    .map(row => {
+  const pageParts: ContextPart[] = ((pageSummaries as PageSummaryRow[]) || [])
+    .map((row) => {
       const text = renderSummaryJson(row.summary_json);
       return {
-        label: 'page-summary',
+        label: "page-summary",
         page: row.page_number,
         text,
         citations: [{ page: row.page_number }],
-        estimatedTokens: roughTokenEstimate(text)
+        estimatedTokens: roughTokenEstimate(text),
       } as ContextPart;
     })
-    .filter(part => !!part.text);
+    .filter((part) => !!part.text);
 
-  const chunkCandidates = await getRankedChunks(supabase, bookId, resolvedWindow, queryTokens);
+  const chunkCandidates = await getRankedChunks(
+    supabase,
+    bookId,
+    resolvedWindow,
+    queryTokens,
+  );
 
   const maxParagraphs = Math.max(desiredK.min, Math.min(desiredK.max, 8));
-  const paragraphParts: ContextPart[] = chunkCandidates.slice(0, maxParagraphs).map(chunk => {
-    const raw = chunk.raw_text?.trim() || '';
-    const text = raw.length > 900 ? `${raw.slice(0, 900)}…` : raw;
-    return {
-      label: 'paragraph',
-      page: chunk.page_number,
-      text,
-      citations: [{ page: chunk.page_number, chunkId: chunk.id }],
-      estimatedTokens: roughTokenEstimate(text)
-    } as ContextPart;
-  }).filter(part => !!part.text);
+  const paragraphParts: ContextPart[] = chunkCandidates
+    .slice(0, maxParagraphs)
+    .map((chunk) => {
+      const raw = chunk.raw_text?.trim() || "";
+      const text = raw.length > 900 ? `${raw.slice(0, 900)}…` : raw;
+      return {
+        label: "paragraph",
+        page: chunk.page_number,
+        text,
+        citations: [{ page: chunk.page_number, chunkId: chunk.id }],
+        estimatedTokens: roughTokenEstimate(text),
+      } as ContextPart;
+    })
+    .filter((part) => !!part.text);
 
   // If the user explicitly asks about a specific page (e.g., "page 334")
   // and that page is within the resolved window, ensure we include at least
   // one paragraph snippet from that page even if its lexical score is low.
   const explicitPage = extractExplicitPageFromQuestion(question);
   let explicitPagePart: ContextPart | null = null;
-  if (explicitPage && explicitPage >= resolvedWindow.start && explicitPage <= resolvedWindow.end) {
+  if (
+    explicitPage &&
+    explicitPage >= resolvedWindow.start &&
+    explicitPage <= resolvedWindow.end
+  ) {
     // Force-fetch at least one chunk for the explicit page directly from DB,
     // independent of the heuristic ranking.
     const { data: explicitChunks, error: explicitErr } = await supabase
-      .from('book_page_chunks')
-      .select('id,page_number,intra_index,raw_text')
-      .eq('book_id', bookId)
-      .eq('page_number', explicitPage)
-      .order('intra_index')
+      .from("book_page_chunks")
+      .select("id,page_number,intra_index,raw_text")
+      .eq("book_id", bookId)
+      .eq("page_number", explicitPage)
+      .order("intra_index")
       .limit(1);
 
     if (!explicitErr && explicitChunks && explicitChunks.length > 0) {
       const targetChunk = explicitChunks[0] as ChunkRow;
-      const raw = targetChunk.raw_text?.trim() || '';
+      const raw = targetChunk.raw_text?.trim() || "";
       const text = raw.length > 900 ? `${raw.slice(0, 900)}…` : raw;
       if (text) {
         explicitPagePart = {
-          label: 'paragraph',
+          label: "paragraph",
           page: targetChunk.page_number,
           text,
-          citations: [{ page: targetChunk.page_number, chunkId: targetChunk.id }],
-          estimatedTokens: roughTokenEstimate(text)
+          citations: [
+            { page: targetChunk.page_number, chunkId: targetChunk.id },
+          ],
+          estimatedTokens: roughTokenEstimate(text),
         } as ContextPart;
       }
     }
   }
 
-  const orderedParts = [...chapterParts, ...pageParts, ...(explicitPagePart ? [explicitPagePart] : []), ...paragraphParts];
+  const orderedParts = [
+    ...chapterParts,
+    ...pageParts,
+    ...(explicitPagePart ? [explicitPagePart] : []),
+    ...paragraphParts,
+  ];
   if (!orderedParts.length) {
-    throw new Error('context-window-data-missing');
+    throw new Error("context-window-data-missing");
   }
 
   const includedParts: ContextPart[] = [];
@@ -425,16 +500,16 @@ Instructions:
     systemPrompt,
     userPrompt: question,
     parts: includedParts,
-    citations: includedParts.flatMap(part => part.citations),
+    citations: includedParts.flatMap((part) => part.citations),
     estimatedTokens,
     tokenEstimate: {
       inputTokens: estimatedTokens,
       estimatedOutputTokens: 500,
       totalTokens: estimatedTokens + 500,
       estimatedCost: 0,
-      provider: 'context-window'
+      provider: "context-window",
     },
     contextText,
-    resolvedWindow
+    resolvedWindow,
   };
 }

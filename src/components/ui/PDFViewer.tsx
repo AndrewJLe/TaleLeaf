@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
-import { pdfStorage } from '../../lib/pdf-storage';
+import { useEffect, useRef, useState } from "react";
+import { pdfStorage } from "../../lib/pdf-storage";
 
 interface PDFViewerProps {
   uploadId: string;
@@ -14,7 +14,7 @@ export default function PDFViewer({
   uploadId,
   currentPage = 1,
   onPageChange,
-  className = ""
+  className = "",
 }: PDFViewerProps) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,12 +36,12 @@ export default function PDFViewer({
         if (url) {
           setBlobUrl(url);
         } else {
-          setError('PDF not found. It may have been removed from storage.');
+          setError("PDF not found. It may have been removed from storage.");
         }
       } catch (err) {
         if (!mounted) return;
-        console.error('Failed to load PDF:', err);
-        setError('Failed to load PDF. Please try refreshing the page.');
+        console.error("Failed to load PDF:", err);
+        setError("Failed to load PDF. Please try refreshing the page.");
       } finally {
         if (mounted) {
           setLoading(false);
@@ -62,14 +62,16 @@ export default function PDFViewer({
   // Update iframe src when page changes
   useEffect(() => {
     if (blobUrl && iframeRef.current) {
-      const pageFragment = currentPage > 1 ? `#page=${currentPage}` : '';
+      const pageFragment = currentPage > 1 ? `#page=${currentPage}` : "";
       iframeRef.current.src = `${blobUrl}${pageFragment}`;
     }
   }, [blobUrl, currentPage]);
 
   if (loading) {
     return (
-      <div className={`flex items-center justify-center bg-gray-50 h-full ${className}`}>
+      <div
+        className={`flex items-center justify-center bg-gray-50 h-full ${className}`}
+      >
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
           <p className="text-sm text-gray-600">Loading PDF...</p>
@@ -80,10 +82,14 @@ export default function PDFViewer({
 
   if (error) {
     return (
-      <div className={`flex items-center justify-center bg-gray-50 h-full ${className}`}>
+      <div
+        className={`flex items-center justify-center bg-gray-50 h-full ${className}`}
+      >
         <div className="text-center p-6">
           <div className="text-4xl mb-4 text-red-400">⚠️</div>
-          <h3 className="text-lg font-medium text-gray-700 mb-2">PDF Loading Error</h3>
+          <h3 className="text-lg font-medium text-gray-700 mb-2">
+            PDF Loading Error
+          </h3>
           <p className="text-sm text-gray-500 mb-4 max-w-sm">{error}</p>
           <button
             onClick={() => window.location.reload()}
@@ -105,13 +111,13 @@ export default function PDFViewer({
             src={`${blobUrl}#page=${currentPage}`}
             className="w-full h-full border-0"
             title="PDF Document"
-            onError={() => setError('Failed to display PDF')}
+            onError={() => setError("Failed to display PDF")}
           />
 
           {/* Floating action buttons */}
           <div className="absolute top-2 right-2 flex gap-1">
             <button
-              onClick={() => window.open(blobUrl, '_blank')}
+              onClick={() => window.open(blobUrl, "_blank")}
               className="p-1 bg-black/70 text-white rounded hover:bg-black/90 transition-colors text-xs"
               title="Open in new tab"
             >
